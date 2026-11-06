@@ -13,28 +13,6 @@ p.comment {font-style: italic}
 	padding-left:5pt;
 }
 
-/** Browser Tree using XLoadTree 2 **/
-body.browser {
-	height:	100%;
-	margin:	0px;
-	padding: 0px;
-	text-align: left;
-}
-.refreshTree {
-	float:right;
-	text-align:right;
-	padding: 0 3px;
-}
-.webfx-tree-row {white-space: nowrap}
-.webfx-tree-children {
-	background-repeat: repeat-y;
-	background-position-y: 1px !important;	/* IE only */
-}
-.webfx-tree-row img {vertical-align: middle}
-.webfx-tree-item-label {margin-left: 0.5ex}
-.webfx-tree-icon {margin-left: 1px}
-.webfx-tree-hide-root {display: none}
-
 /** auto-complete on insert **/
 #fkbg {
 	display:none;
@@ -129,3 +107,803 @@ div.fk_value {
 .comment {color: #008080}
 .keyword {color: #FF8000}
 .literal {color: #808080}
+
+/* ======================================================================
+ * Shared component styles, used by every theme. Themes only set colours.
+ * Each block below is owned by one area of the app; keep edits inside it.
+ * ====================================================================== */
+
+/* ---- Layout: app shell, sidebar, tree (js/app.js, js/tree.js) ---- */
+
+/* The shell: sidebar on the start side, page on the other. The page
+ * scrolls with the window; the sidebar stays put and scrolls on its own. */
+body.ppa-shell {
+	margin: 0;
+	padding: 0;
+}
+#ppa-app {
+	display: grid;
+	grid-template-columns: var(--ppa-sidebar-width, 200px) minmax(0, 1fr);
+	min-height: 100vh;
+}
+#ppa-sidebar {
+	position: sticky;
+	top: 0;
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	overflow: hidden;
+	border-inline-end: 1px solid rgba(128, 128, 128, 0.35);
+	text-align: start;
+}
+#ppa-main {
+	min-width: 0;
+	padding: 6px 12px 40px;
+	overflow-x: auto;
+	outline: none;
+}
+.ppa-brand {
+	flex: none;
+}
+/* Themes draw the logo as a background image and hide the link text. */
+#ppa-sidebar .logo a {
+	color: transparent;
+}
+.ppa-tree-tools {
+	flex: none;
+	display: flex;
+	gap: 4px;
+	padding: 6px;
+}
+#ppa-tree-filter {
+	flex: 1;
+	min-width: 0;
+	box-sizing: border-box;
+	padding: 3px 6px;
+}
+#ppa-tree-refresh {
+	flex: none;
+	padding: 2px 4px;
+	background: none;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	cursor: pointer;
+	line-height: 0;
+}
+#ppa-tree-refresh:hover {
+	border-color: rgba(128, 128, 128, 0.5);
+}
+#ppa-tree {
+	flex: 1;
+	overflow: auto;
+	padding: 0 4px 16px;
+}
+.ppa-tree,
+.ppa-tree ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.ppa-tree ul {
+	padding-inline-start: 14px;
+}
+.ppa-node {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 1px 2px;
+	border-radius: 3px;
+	white-space: nowrap;
+}
+.ppa-node:hover {
+	background-color: rgba(128, 128, 128, 0.16);
+}
+.ppa-node.selected {
+	background-color: rgba(128, 128, 128, 0.3);
+}
+.ppa-node.ppa-match .ppa-label {
+	font-weight: bold;
+}
+.ppa-twisty {
+	flex: none;
+	width: 12px;
+	font-size: 10px;
+	line-height: 1;
+	text-align: center;
+	opacity: 0.7;
+	cursor: pointer;
+	user-select: none;
+}
+li[aria-expanded="false"] > .ppa-node > .ppa-twisty::before { content: "\25B8"; }
+li[aria-expanded="true"] > .ppa-node > .ppa-twisty::before { content: "\25BE"; }
+[dir="rtl"] li[aria-expanded="false"] > .ppa-node > .ppa-twisty::before { content: "\25C2"; }
+.ppa-icon {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	vertical-align: middle;
+}
+.ppa-icon-link {
+	line-height: 0;
+}
+.ppa-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding: 1px 2px;
+	border-radius: 2px;
+}
+.ppa-label:focus-visible,
+#ppa-tree-refresh:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 1px;
+}
+.ppa-tree .ppa-message {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 1px 2px 1px 15px;
+	font-style: italic;
+	opacity: 0.75;
+	white-space: nowrap;
+}
+.ppa-tree .ppa-error {
+	cursor: pointer;
+}
+.ppa-tree .ppa-hidden {
+	display: none;
+}
+.ppa-tree.ppa-filtering li.ppa-filter-open > ul {
+	display: block !important;
+}
+.ppa-tree-empty {
+	margin: 4px 8px;
+	font-style: italic;
+	opacity: 0.75;
+}
+#ppa-sidebar-resize {
+	position: absolute;
+	top: 0;
+	inset-inline-end: -3px;
+	width: 7px;
+	height: 100%;
+	cursor: col-resize;
+	z-index: 2;
+}
+#ppa-sidebar-resize:hover,
+body.ppa-resizing #ppa-sidebar-resize {
+	background: rgba(128, 128, 128, 0.35);
+}
+body.ppa-resizing {
+	cursor: col-resize;
+	user-select: none;
+}
+#ppa-sidebar-toggle {
+	display: none;
+}
+
+/* Thin bar at the top while a page loads. */
+#ppa-progress {
+	position: fixed;
+	top: 0;
+	inset-inline-start: 0;
+	z-index: 1000;
+	width: 0;
+	height: 3px;
+	background: #1a73e8;
+	opacity: 0;
+	pointer-events: none;
+	transition: width 0.3s ease, opacity 0.3s ease;
+}
+#ppa-progress.active {
+	width: 85%;
+	opacity: 1;
+	transition: width 10s cubic-bezier(0.1, 0.8, 0.2, 1), opacity 0.1s;
+}
+
+/* Top bar, breadcrumbs and tabs. Themes give them colours and borders. */
+.topbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 2px 16px;
+}
+.topbar-links {
+	margin-inline-start: auto;
+}
+.trail ol {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.trail li.crumb {
+	display: inline-flex;
+	align-items: center;
+}
+.crumb .icon img,
+.tab .icon img {
+	vertical-align: middle;
+}
+nav.tabs {
+	margin-bottom: 1ex;
+}
+nav.tabs ul {
+	display: flex;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	overflow-x: auto;
+}
+nav.tabs li.tab {
+	flex: 1 1 0;
+	min-width: min-content;
+}
+nav.tabs li.tab + li.tab {
+	border-inline-start-width: 0;
+}
+
+/* Messages and confirmation pages. */
+p.message.error {
+	color: #b3261e;
+	font-weight: bold;
+}
+input.danger,
+button.danger {
+	background: #b3261e;
+	border: 1px solid #8c1d18;
+	border-radius: 3px;
+	color: #fff;
+	padding: 3px 12px;
+	cursor: pointer;
+}
+input.danger:hover,
+button.danger:hover {
+	background: #8c1d18;
+}
+input[type="submit"]:focus-visible,
+button:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 2px;
+}
+
+/* Dialogs (js/app.js): confirmations as a centred modal, row editing as a
+ * panel from the side. They take the page's own colours. */
+dialog.ppa-dialog {
+	box-sizing: border-box;
+	padding: 0;
+	border: 1px solid rgba(128, 128, 128, 0.45);
+	border-radius: 6px;
+	background-color: inherit;
+	color: inherit;
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+	max-height: 85vh;
+	overflow: hidden;
+}
+dialog.ppa-dialog[open] {
+	display: flex;
+	flex-direction: column;
+}
+dialog.ppa-dialog::backdrop {
+	background: rgba(0, 0, 0, 0.4);
+}
+dialog.ppa-dialog-modal {
+	width: min(560px, calc(100vw - 32px));
+	animation: ppa-dialog-in 0.15s ease-out;
+}
+dialog.ppa-dialog-panel {
+	width: min(720px, 94vw);
+	height: 100vh;
+	max-height: 100vh;
+	margin: 0 0 0 auto;
+	border-radius: 0;
+	border-width: 0 0 0 1px;
+	animation: ppa-panel-in 0.2s ease-out;
+}
+[dir="rtl"] dialog.ppa-dialog-panel {
+	margin: 0 auto 0 0;
+	border-width: 0 1px 0 0;
+	animation-name: ppa-panel-in-rtl;
+}
+.ppa-dialog-head {
+	flex: none;
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 10px 12px 0;
+}
+.ppa-dialog-head h2 {
+	flex: 1;
+	margin: 0;
+}
+.ppa-dialog-close {
+	flex: none;
+	margin-inline-start: auto;
+	width: 30px;
+	height: 30px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: none;
+	color: inherit;
+	font-size: 22px;
+	line-height: 1;
+	cursor: pointer;
+}
+.ppa-dialog-close:hover {
+	border-color: rgba(128, 128, 128, 0.5);
+}
+.ppa-dialog-body {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 8px 14px 14px;
+}
+/* The edit form fits the panel: value fields take the room that's left
+ * instead of their fixed size/cols. */
+.ppa-dialog-panel .ppa-dialog-body > form > table {
+	width: 100%;
+}
+.ppa-dialog-panel .ppa-dialog-body > form > table td:last-child {
+	width: 100%;
+}
+.ppa-dialog-panel .ppa-dialog-body td:last-child textarea,
+.ppa-dialog-panel .ppa-dialog-body td:last-child input[type="text"],
+.ppa-dialog-panel .ppa-dialog-body td:last-child input:not([type]) {
+	width: 100%;
+	min-width: 10em;
+	box-sizing: border-box;
+}
+@keyframes ppa-dialog-in {
+	from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@keyframes ppa-panel-in {
+	from { transform: translateX(40px); opacity: 0; }
+}
+@keyframes ppa-panel-in-rtl {
+	from { transform: translateX(-40px); opacity: 0; }
+}
+@media (max-width: 760px) {
+	/* Edit form on a phone: name, type, format and null on one line, the
+	 * value full width below it. */
+	.ppa-dialog-panel .ppa-dialog-body > form > table,
+	.ppa-dialog-panel .ppa-dialog-body > form > table > tbody {
+		display: block;
+	}
+	.ppa-dialog-panel .ppa-dialog-body > form > table tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto auto;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 0;
+	}
+	.ppa-dialog-panel .ppa-dialog-body > form > table tr:first-child {
+		display: none;   /* the column headings */
+	}
+	.ppa-dialog-panel .ppa-dialog-body > form > table td:last-child {
+		grid-column: 1 / -1;
+		width: auto;
+	}
+	dialog.ppa-dialog-panel,
+	dialog.ppa-dialog-modal {
+		width: 100vw;
+		max-width: 100vw;
+		height: 100%;
+		max-height: 100%;
+		margin: 0;
+		border-radius: 0;
+		border-width: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	dialog.ppa-dialog { animation: none; }
+}
+
+/* Small screens: the sidebar slides in over the page. */
+@media (max-width: 760px) {
+	#ppa-app {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	#ppa-sidebar {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		inset-inline-start: 0;
+		z-index: 50;
+		width: min(85vw, 320px);
+		height: auto;
+		transform: translateX(-100%);
+		transition: transform 0.2s ease;
+		box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+		visibility: hidden;
+	}
+	[dir="rtl"] #ppa-sidebar {
+		transform: translateX(100%);
+	}
+	body.ppa-sidebar-open #ppa-sidebar {
+		transform: none;
+		visibility: visible;
+	}
+	#ppa-sidebar-resize {
+		display: none;
+	}
+	#ppa-sidebar-toggle {
+		display: block;
+		position: fixed;
+		bottom: 14px;
+		inset-inline-start: 14px;
+		z-index: 60;
+		width: 46px;
+		height: 46px;
+		border: 1px solid rgba(0, 0, 0, 0.25);
+		border-radius: 50%;
+		background: #fff;
+		color: #222;
+		font-size: 20px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		cursor: pointer;
+	}
+	#ppa-main {
+		padding: 4px 8px 72px;
+	}
+	nav.tabs li.tab {
+		flex: 0 0 auto;
+	}
+	.topbar-links {
+		margin-inline-start: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	#ppa-sidebar,
+	#ppa-progress,
+	#ppa-progress.active {
+		transition: none;
+	}
+}
+/* ---- end layout ---- */
+
+
+/* ---- Data grid: browse/query results (display.php, sql.php, js/grid.js) ---- */
+
+/* Themes set the colours of th.data and tr.data1/data2; everything here
+ * uses currentColor or translucent colours so it suits light and dark themes. */
+
+/* The grid scrolls in its own box so that the header can stick to its top */
+.data-scroll {
+	box-sizing: border-box;
+	width: fit-content;
+	max-width: 100%;
+	max-height: 70vh;
+	overflow: auto;
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+	border: 1px solid rgba(128, 128, 128, 0.35);
+}
+.data-scroll > table.data-grid,
+.data-scroll > #fkcontainer > table.data-grid {
+	margin: 0;
+}
+/* The header (column names and the filter row) stays visible while scrolling */
+table.data-grid > thead {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+/* Header rows outside a thead stick on their own */
+table.data-grid > tbody:first-child > tr:first-child > th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+/* Themes give th.data its background; this only fills in where one doesn't,
+ * so rows never show through a stuck header (:where() keeps it overridable) */
+:where(table.data-grid) th {
+	background-color: Canvas;
+}
+table.data-grid th.data {
+	text-align: left;
+	white-space: nowrap;
+	vertical-align: bottom;
+}
+table.data-grid th.data > a img {
+	vertical-align: middle;
+	margin-left: 2px;
+}
+table.data-grid > tbody > tr > td {
+	vertical-align: top;
+}
+
+/* Quick filter row */
+table.data-grid tr.grid-filter > th {
+	padding-top: 2px;
+	padding-bottom: 4px;
+	font-weight: normal;
+}
+table.data-grid tr.grid-filter input {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 5em;
+	padding: 2px 4px;
+	font: inherit;
+	font-size: 0.9em;
+	color: inherit;
+	background: rgba(128, 128, 128, 0.12);
+	border: 1px solid rgba(128, 128, 128, 0.5);
+	border-radius: 3px;
+}
+table.data-grid tr.grid-filter input:focus {
+	outline: 2px solid rgba(80, 140, 230, 0.7);
+	outline-offset: -1px;
+}
+table.data-grid tr.grid-filter input::placeholder {
+	color: inherit;
+	opacity: 0.45;
+}
+
+/* NULL and empty string, told apart from each other and from text */
+span.null,
+span.empty {
+	font-size: 0.8em;
+	font-style: italic;
+	opacity: 0.6;
+	letter-spacing: 0.03em;
+}
+span.null {
+	font-variant: small-caps;
+	padding: 0 0.4em;
+	border: 1px solid currentColor;
+	border-radius: 0.7em;
+}
+span.empty {
+	padding: 0 0.3em;
+	border: 1px dashed currentColor;
+	border-radius: 2px;
+}
+
+/* Toolbar above the grid: row count, rows per page, filter buttons */
+.grid-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4em 1.5em;
+	margin-top: 0.75em;
+	margin-bottom: 0.25em;
+}
+.grid-toolbar p {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+.grid-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5em;
+	margin: 0;
+}
+p.grid-count {
+	font-variant-numeric: tabular-nums;
+}
+a.grid-count-exact,
+a.grid-clear-filters {
+	margin-left: 0.5em;
+}
+p.grid-hint {
+	font-size: 0.85em;
+	opacity: 0.65;
+}
+
+/* Page navigation */
+nav.pagination {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	align-items: center;
+	gap: 0.25em;
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+nav.pagination .pagenav {
+	display: inline-block;
+	min-width: 1.6em;
+	padding: 0.15em 0.45em;
+	text-align: center;
+	border: 1px solid transparent;
+	border-radius: 3px;
+}
+nav.pagination a.pagenav:hover {
+	border-color: rgba(128, 128, 128, 0.5);
+}
+nav.pagination .pagenav.current {
+	font-weight: bold;
+	border-color: currentColor;
+}
+nav.pagination .pagenav.gap {
+	opacity: 0.6;
+}
+
+/* "Copied" message after double-clicking a cell */
+.grid-toast {
+	position: fixed;
+	left: 50%;
+	bottom: 2em;
+	z-index: 1000;
+	transform: translateX(-50%);
+	padding: 0.4em 1em;
+	border-radius: 4px;
+	color: #fff;
+	background: rgba(30, 30, 30, 0.9);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.15s;
+}
+.grid-toast.grid-toast-show {
+	opacity: 1;
+}
+.grid-toast.grid-toast-error {
+	background: rgba(160, 30, 30, 0.95);
+}
+
+/* ---- end data grid ---- */
+
+
+/* ---- SQL editor (sqledit.php, database.php SQL tab, js/sqleditor.js) ---- */
+/* js/sqleditor.js copies the background and text colour of the theme's
+ * textarea onto the editor and picks the "ppa" or "ppa-dark" CodeMirror theme
+ * from how dark that background is. Everything else here is translucent or
+ * currentColor so it works on any theme. */
+.CodeMirror.sql-editor-cm {
+	border: 1px solid rgba(128, 128, 128, 0.55);
+	font-family: var(--ppa-mono, ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace);
+	font-size: var(--ppa-size, 13px);
+	line-height: 1.4;
+	resize: vertical;
+	min-height: 5em;
+	margin-top: 0.25em;
+	margin-bottom: 0.25em;
+}
+.CodeMirror.sql-editor-cm.CodeMirror-focused {
+	border-color: rgba(70, 130, 220, 0.9);
+	box-shadow: 0 0 0 1px rgba(70, 130, 220, 0.45);
+}
+.sql-editor-cm .CodeMirror-gutters {
+	background: rgba(128, 128, 128, 0.08);
+	border-right: 1px solid rgba(128, 128, 128, 0.3);
+}
+.sql-editor-cm .CodeMirror-linenumber { color: inherit; opacity: 0.55; }
+.sql-editor-cm .CodeMirror-cursor { border-left-color: currentColor; }
+.sql-editor-cm .CodeMirror-selected { background: rgba(80, 140, 255, 0.22); }
+.sql-editor-cm.CodeMirror-focused .CodeMirror-selected { background: rgba(80, 140, 255, 0.35); }
+.sql-editor-cm .CodeMirror-line::selection,
+.sql-editor-cm .CodeMirror-line > span::selection,
+.sql-editor-cm .CodeMirror-line > span > span::selection { background: rgba(80, 140, 255, 0.35); }
+.sql-editor-cm .CodeMirror-placeholder { color: inherit; opacity: 0.5; }
+.sql-editor-cm div.CodeMirror span.CodeMirror-matchingbracket,
+.sql-editor-cm span.CodeMirror-matchingbracket {
+	color: inherit;
+	background: rgba(40, 180, 90, 0.3);
+	outline: 1px solid rgba(40, 180, 90, 0.7);
+}
+.sql-editor-cm span.CodeMirror-nonmatchingbracket { color: inherit; background: rgba(230, 40, 40, 0.35); }
+.sql-editor-cm .sql-editor-error-line { background: rgba(230, 40, 40, 0.16); }
+.sql-editor-cm .sql-editor-error-mark { text-decoration: underline wavy rgb(220, 40, 40); text-decoration-skip-ink: none; }
+
+/* Syntax colours for light backgrounds ... */
+.cm-s-ppa .cm-keyword { color: #7a2bb0; font-weight: 600; }
+.cm-s-ppa .cm-builtin, .cm-s-ppa .cm-type { color: #0b5cad; }
+.cm-s-ppa .cm-string, .cm-s-ppa .cm-string-2 { color: #a3381e; }
+.cm-s-ppa .cm-number, .cm-s-ppa .cm-atom { color: #0f7a5c; }
+.cm-s-ppa .cm-comment { color: #6b7280; font-style: italic; }
+.cm-s-ppa .cm-variable-2, .cm-s-ppa .cm-variable-3 { color: #8a5a00; }
+.cm-s-ppa .cm-operator, .cm-s-ppa .cm-bracket, .cm-s-ppa .cm-punctuation { color: inherit; }
+/* ... and for dark ones. */
+.cm-s-ppa-dark .cm-keyword { color: #d4a5ff; font-weight: 600; }
+.cm-s-ppa-dark .cm-builtin, .cm-s-ppa-dark .cm-type { color: #84c2ff; }
+.cm-s-ppa-dark .cm-string, .cm-s-ppa-dark .cm-string-2 { color: #f2b48a; }
+.cm-s-ppa-dark .cm-number, .cm-s-ppa-dark .cm-atom { color: #7fdcb8; }
+.cm-s-ppa-dark .cm-comment { color: #9ca3af; font-style: italic; }
+.cm-s-ppa-dark .cm-variable-2, .cm-s-ppa-dark .cm-variable-3 { color: #f0d080; }
+.cm-s-ppa-dark .cm-operator, .cm-s-ppa-dark .cm-bracket, .cm-s-ppa-dark .cm-punctuation { color: inherit; }
+
+/* Autocomplete popup (appended to <body>, classed with the editor theme) */
+.CodeMirror-hints.ppa, .CodeMirror-hints.ppa-dark {
+	font-family: var(--ppa-mono, ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace);
+	font-size: var(--ppa-size-sm, 12px);
+	max-height: 16em;
+	z-index: 1000;
+}
+.CodeMirror-hints.ppa-dark {
+	background: #2d2d2d;
+	border-color: #5a5a5a;
+	box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.5);
+}
+.CodeMirror-hints.ppa-dark .CodeMirror-hint { color: #eee; }
+.CodeMirror-hints.ppa li.CodeMirror-hint-active,
+.CodeMirror-hints.ppa-dark li.CodeMirror-hint-active { background: #2f6fcf; color: #fff; }
+.CodeMirror-hints .CodeMirror-hint-table { font-weight: 600; }
+.CodeMirror-hints .CodeMirror-hint-schema { font-weight: 600; font-style: italic; }
+.CodeMirror-hints .ppa-hint-note {
+	margin-inline-start: 1.5em;
+	font-weight: normal;
+	font-style: normal;
+	opacity: 0.65;
+}
+
+/* Toolbar: Execute / Explain / Explain analyze / Reset / Recent queries */
+.sql-editor-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4em;
+	margin: 0.5em 0;
+}
+.sql-editor-toolbar input.sql-editor-execute { font-weight: bold; }
+.sql-editor-toolbar input.sql-editor-explain-analyze { border-left: 3px solid rgb(214, 140, 20); }
+.sql-editor-history { position: relative; }
+.sql-editor-history > summary {
+	cursor: pointer;
+	padding: 0.15em 0.5em;
+	border: 1px solid rgba(128, 128, 128, 0.55);
+	border-radius: 3px;
+	list-style: none;
+	user-select: none;
+}
+.sql-editor-history > summary::-webkit-details-marker { display: none; }
+.sql-editor-history > summary::after { content: " \25BE"; }
+.sql-editor-history-menu {
+	position: absolute;
+	z-index: 50;
+	left: 0;
+	top: 100%;
+	margin-top: 2px;
+	width: 36em;
+	max-width: 80vw;
+	max-height: 22em;
+	overflow: auto;
+	padding: 0.25em;
+	background: Canvas;
+	color: CanvasText;
+	border: 1px solid rgba(128, 128, 128, 0.6);
+	box-shadow: 2px 3px 10px rgba(0, 0, 0, 0.3);
+}
+.sql-editor-history-menu ul { list-style: none; margin: 0; padding: 0; }
+.sql-editor-history-menu p { margin: 0.3em; opacity: 0.75; }
+button.sql-editor-history-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: 0.3em 0.4em;
+	border: 0;
+	border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+	background: transparent;
+	color: inherit;
+	font-family: var(--ppa-mono, ui-monospace, monospace);
+	font-size: var(--ppa-size-sm, 12px);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+button.sql-editor-history-item:hover,
+button.sql-editor-history-item:focus { background: rgba(80, 140, 255, 0.25); }
+button.sql-editor-history-clear { margin: 0.4em 0.2em 0.1em; }
+
+/* sql.php: status line, error, notices and long values in the results */
+.sql-status { margin-top: 0.5em; margin-bottom: 0.5em; }
+.sql-status .sql-ok, .sql-status .sql-failed { font-weight: bold; }
+table.error.sql-error { border-left: 4px solid rgb(220, 40, 40); margin-top: 0.5em; margin-bottom: 0.5em; }
+table.error.sql-error pre.error { white-space: pre-wrap; margin: 0.3em 0 0; }
+p.sql-rows-capped {
+	padding: 0.35em 0.6em;
+	border-left: 4px solid rgb(214, 140, 20);
+	background: rgba(214, 140, 20, 0.14);
+}
+.sql-results td { white-space: nowrap; vertical-align: top; }
+.sql-results .sql-full { display: none; max-width: 60em; overflow-wrap: anywhere; }
+input.sql-expand:checked ~ .sql-results .sql-clipped { display: none; }
+input.sql-expand:checked ~ .sql-results .sql-full { display: block; }
+input.sql-expand:checked ~ .sql-results td { white-space: pre-wrap; }
+
+/* ---- end SQL editor ---- */

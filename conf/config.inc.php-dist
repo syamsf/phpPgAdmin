@@ -155,6 +155,15 @@
 	// Max chars of each field to display by default in browse mode
 	$conf['max_chars'] = 50;
 
+	// Browsing a table counts its rows exactly only when the planner estimates
+	// it has at most this many rows.  Bigger tables show "about N rows" and a
+	// link to count them exactly.
+	$conf['browse_exact_count_limit'] = 100000;
+
+	// Max rows to show on the SQL results page when not paginating.
+	// Larger results are cut off with a notice; use pagination or Download.
+	$conf['max_result_rows'] = 1000;
+
 	// Send XHTML strict headers?
 	$conf['use_xhtml_strict'] = false;
 
@@ -162,6 +171,10 @@
 	// '%s', if present, will be replaced with the PostgreSQL version
 	// (e.g. 8.4 )
 	$conf['help_base'] = 'http://www.postgresql.org/docs/%s/interactive/';
+
+	// Abort statements that run longer than this, e.g. '30s' or '5min'
+	// (PostgreSQL's statement_timeout). Empty means no limit.
+	$conf['statement_timeout'] = '';
 
 	// Configuration for ajax scripts
 	// Time in seconds. If set to 0, refreshing data using ajax will be disabled (locks and activity pages)

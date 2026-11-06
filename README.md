@@ -12,6 +12,34 @@ kept it alive with PHP 8 fixes, and this repo builds on that. What's added here:
 - GitHub Actions that run those tests and push the image to Docker Hub when a
   release is published
 - a few fixes for things that broke on newer PostgreSQL (see `HISTORY`)
+- a reworked UI: one page instead of frames, a SQL editor, faster browsing of
+  big tables (see below)
+
+## Using it
+
+- Every page has its own address, so bookmarks, reloads, new tabs and the
+  back button work. Pages load in place; the object tree on the left keeps
+  its state.
+- **Ctrl+K** jumps to the tree filter. Type part of a name, **Enter** opens the
+  first match. Only branches you've opened are searched. The tree can be
+  resized by dragging its edge (double-click resets it); on a phone it slides
+  in from the ☰ button.
+- In the SQL editor, **Ctrl+Enter** (Cmd+Enter on a Mac) runs the query, or
+  only the selected text if there is a selection. Keywords, schemas, tables and
+  columns are suggested as you type (and after `schema.` or `table.`).
+  Picking a schema lists its tables; tables outside the search path are
+  offered by their bare name and inserted as `schema.table`. **Ctrl+Space**
+  shows suggestions any time. "Explain analyze" really runs the statement. The
+  last 50 queries per database are kept in your browser under "Recent
+  queries".
+- When browsing a table, the row above the data filters each column
+  (`=value` for an exact match), and the page size can be changed. Big tables
+  show an estimated row count ("about 1.2M rows") instead of counting every
+  row; there's a link to count exactly. Double-click a cell to copy its full
+  value. Edit opens the row in a panel next to the grid, Delete asks in a
+  small dialog; either way you stay on the same page, filters and scroll
+  position. Drop/empty confirmations elsewhere open as dialogs too.
+  Ctrl/Cmd+click opens the full page instead.
 
 ## Running it
 
@@ -74,11 +102,15 @@ or with an empty password. Create a normal login role for yourself, or set
 | `PPA_THEME` | `default` | `default`, `bootstrap`, `cappuccino`, `dark`, `gotar`. |
 | `PPA_MAX_ROWS` | `30` | Rows per page when browsing. |
 | `PPA_MAX_CHARS` | `50` | Characters shown per field before cutting it off. |
+| `PPA_BROWSE_EXACT_COUNT_LIMIT` | `100000` | Tables the planner estimates to have more rows than this are browsed without counting them: the page shows "about N rows" and a link to count exactly. |
+| `PPA_MAX_RESULT_ROWS` | `1000` | Rows shown on the SQL results page without pagination. The rest is cut off with a notice. |
 | `PPA_MIN_PASSWORD_LENGTH` | `1` | |
 | `PPA_LEFT_WIDTH` | `200` | Width of the tree on the left, in pixels. |
 | `PPA_AJAX_REFRESH` | `3` | Seconds between refreshes on the locks and processes pages. `0` turns it off. |
 | `PPA_AUTOCOMPLETE` | `default on` | `default on`, `default off` or `disable`. |
 | `PPA_PLUGINS` | | Comma-separated, e.g. `Report`. |
+| `PPA_STATEMENT_TIMEOUT` | | Cancel statements that run longer than this, e.g. `30s` or `5min` (PostgreSQL's `statement_timeout`, also applies to the SQL editor). Unset means no limit. |
+| `PGCONNECT_TIMEOUT` | `10` | Seconds to wait for a server to accept a connection. |
 | `PHP_SESSION_COOKIE_SECURE` | `0` | Set to `1` when the site is served over HTTPS. |
 
 If you need something the variables can't do (server groups, a different
@@ -94,6 +126,13 @@ then.
   older client.
 - `conf/`, `classes/`, `lang/` and the ADOdb library return 403 over HTTP.
 - PHP errors go to the container log (`docker logs`), not the page.
+- OPcache doesn't check files for changes. If you mount your own
+  `config.inc.php`, restart the container after editing it.
+- `/healthz` is a static file for health checks; the image's `HEALTHCHECK`
+  uses it.
+- Release images show their tag as the version, e.g. `v1.2.0-mod`. Local builds
+  can set it with `--build-arg PPA_RELEASE=v1.2.0`; without it they show the
+  version in `libraries/lib.inc.php`.
 
 Don't put this on the public internet. It's a login form that hands out
 database sessions and has a long history of XSS and CSRF reports. Keep it on
@@ -132,16 +171,24 @@ tests/run.sh                              # PHP 8.5, PostgreSQL 18
 PG_VERSION=12 tests/run.sh
 PHP_VERSION=8.1 PG_VERSION=9.6 tests/run.sh
 KEEP=1 tests/run.sh                       # leave it running on :8080 afterwards
+BROWSER=1 tests/run.sh                    # also run the headless Chrome checks
 ```
 
-You need Docker with the Compose plugin and Python 3. The crawler skips
+You need Docker with the Compose plugin and Python 3. `BROWSER=1` also runs
+the scripts in `tests/browser` against the app in headless Chrome (the app
+shell, the SQL editor and the data grid); it needs Node and Chrome
+(`npm ci --prefix tests/browser` once; set `CHROME` if Chrome isn't at
+`/usr/bin/google-chrome`). The crawler skips
 actions that drop, empty or change things on a GET, but it does click a lot,
 so don't point `crawl.py` at a database you care about.
 
 ## Releasing
 
-1. Update `$appVersion` in `libraries/lib.inc.php` and add a section to `HISTORY`.
-2. Tag it as `vX.Y.Z` and publish a GitHub release from that tag.
+1. Turn `Unreleased` in `HISTORY` into `Version vX.Y.Z-mod` with the date, and
+   set `$appVersion` in `libraries/lib.inc.php` to `vX.Y.Z-mod`. That's what
+   non-Docker installs and local builds show.
+2. Tag it as `vX.Y.Z` and publish a GitHub release from that tag. The image
+   shows the tag as the version, `vX.Y.Z-mod`.
 
 The release workflow runs the tests, then builds for amd64 and arm64 and
 pushes `X.Y.Z`, `X.Y` and `latest`. A pre-release (`v7.15.0-rc.1`) only gets

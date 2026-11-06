@@ -94,9 +94,13 @@ $conf['theme'] = ppa_env('PPA_THEME', 'default');
 $conf['show_oids'] = ppa_env_bool('PPA_SHOW_OIDS', false);
 $conf['max_rows'] = (int) ppa_env('PPA_MAX_ROWS', 30);
 $conf['max_chars'] = (int) ppa_env('PPA_MAX_CHARS', 50);
+$conf['browse_exact_count_limit'] = (int) ppa_env('PPA_BROWSE_EXACT_COUNT_LIMIT', 100000);
+$conf['max_result_rows'] = (int) ppa_env('PPA_MAX_RESULT_ROWS', 1000);
 $conf['use_xhtml_strict'] = false;
 $conf['help_base'] = 'https://www.postgresql.org/docs/%s/';
 $conf['ajax_refresh'] = (int) ppa_env('PPA_AJAX_REFRESH', 3);
+// e.g. "30s" or "5min"; unset means no limit.
+$conf['statement_timeout'] = ppa_env('PPA_STATEMENT_TIMEOUT', '');
 $conf['plugins'] = preg_split('/[\s,]+/', ppa_env('PPA_PLUGINS', ''), -1, PREG_SPLIT_NO_EMPTY);
 
 $conf['version'] = 19;

@@ -4,6 +4,81 @@ phpPgAdmin History
 Unreleased
 --------------
 
+Features:
+* One page instead of frames. Every page has its own URL (bookmarks, reload,
+  back/forward and new tabs work), pages load in place and the object tree
+  keeps its state. SQL, History and Find open in the page, not in popups.
+  Works on phones: the tree slides in over the page
+* New object tree: remembers open branches by name, filter box (Ctrl+K),
+  keyboard navigation, resizable
+* SQL editor (CodeMirror) on the SQL tab, the SQL page and view definitions:
+  syntax highlighting, Ctrl+Enter to run, run the selection only, Explain and
+  Explain analyze buttons, keywords and schema/table/column names
+  suggested as you type, recent queries
+  kept in the browser. Results show under the editor, errors highlight the
+  failing line
+* Browsing: page size selector, a filter box per column, sticky column
+  headers, NULL and empty strings look different, double-click copies a
+  cell, "Rows 31-60 of 1,234" instead of the row count of the page
+* Editing a row opens a side panel over the grid, deleting a row and the
+  drop/empty confirmations open a dialog. Saving keeps your page, filters
+  and scroll position; a failed save stays in the panel with the error
+* Tables bigger than browse_exact_count_limit (PPA_BROWSE_EXACT_COUNT_LIMIT,
+  default 100000 rows) are browsed with the planner's row estimate instead of
+  a COUNT(*) on every page; query results check for a next page instead of
+  counting
+* New settings: statement_timeout (PPA_STATEMENT_TIMEOUT), max_result_rows
+  (PPA_MAX_RESULT_ROWS, default 1000); PGCONNECT_TIMEOUT defaults to 10s
+* Destructive buttons on confirmation pages are red and Cancel has the focus.
+  Failure messages are styled as errors. Navigation uses proper nav/list
+  markup, the login form has labels, contrast fixes in the default theme
+* Default theme: larger, clearer text. Sizes no longer shrink with nesting
+  (action buttons were ~9px), and it uses the system UI font
+* The version shown is this fork's release tag plus "-mod", e.g. "v1.2.0-mod".
+  Docker release images take it from the git tag; otherwise it's the version
+  in libraries/lib.inc.php
+
+Performance:
+* The session is no longer locked for the whole request, so a slow query
+  doesn't freeze the tree, other tabs or the processes page
+* Connection settings go in the connection's startup packet: 2 statements
+  per page instead of 8 (tables.php)
+* Database sizes are only computed on the database list
+* Exports stream rows through a cursor instead of loading the whole table
+  into memory
+* Static files are cached by the browser; the Docker image doesn't check PHP
+  files for changes (OPcache) and has a static /healthz for its health check
+
+Bugs:
+* Timestamps were cut to 19 characters in the collapsed view, dropping
+  fractional seconds and the time zone
+* The SQL page said "SQL executed." even when the query failed
+* The tree reloaded after every query; now only after statements that can
+  change the schema
+* Two browser tabs shared one "current query", so paging in one showed the
+  other's results
+* SQL results without pagination rendered every row; now capped at
+  max_result_rows with a notice
+* Reloading the SQL results page showed "could not find the query!!"
+* Locks/processes auto-refresh kept polling after leaving the page
+* Forms with a hidden "action" field (nearly all of them) did a full page
+  load instead of loading in place
+
+
+Version v1.1.0-mod
+--------------
+Released: November 6th, 2026
+
+Features:
+* Servers can list their databases ($conf['servers'][n]['databases'], or
+  "host:port/db1+db2" in PPA_SERVERS) to get a separate login for each one,
+  checked against that database instead of the server's default database
+
+
+Version v1.0.0-mod
+--------------
+Released: November 6th, 2026
+
 Bugs:
 * Privileges page crashed on PostgreSQL 17+ for any table with a MAINTAIN grant
   (which is every table with an ACL, since the owner gets it by default)
@@ -16,9 +91,6 @@ Security:
   directory name
 
 Features:
-* Servers can list their databases ($conf['servers'][n]['databases'], or
-  "host:port/db1+db2" in PPA_SERVERS) to get a separate login for each one,
-  checked against that database instead of the server's default database
 * Docker image (PHP 8.5, Apache, pg_dump 18) configured with environment variables
 * tests/run.sh: crawls the UI against a real PostgreSQL in Docker and fails on
   PHP warnings or SQL errors

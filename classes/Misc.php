@@ -252,7 +252,7 @@
 			// Shortcircuit for a NULL value
 			if (is_null($str))
 				return isset($params['null'])
-						? ($params['null'] === true ? '<i>NULL</i>' : $params['null'])
+						? ($params['null'] === true ? '<span class="null">NULL</span>' : $params['null'])
 						: '';
 
 			if (isset($params['map']) && isset($params['map'][$str])) $str = $params['map'][$str];
@@ -264,9 +264,6 @@
 				if (mb_strlen($str, 'UTF-8') > $maxlen + mb_strlen($ellipsis)) {
 					$full_str = $ellipsis . mb_substr($str, $maxlen-1, $maxlen*8, 'UTF-8');
 					$str = mb_substr($str, 0, $maxlen-1, 'UTF-8') . $ellipsis;
-				} elseif (strlen($str) > 19 and substr($type, 0, 9) == 'timestamp') {
-					$full_str = substr($str, 19, $maxlen*8);
-					$str = substr($str, 0, 19);
 				}
 			}
 
@@ -436,7 +433,37 @@
 		 * @param $msg The message to print
 		 */
 		function printMsg($msg) {
-			if ($msg != '') echo "<p class=\"message\">{$msg}</p>\n";
+			if ($msg == '') return;
+			$error = $this->isErrorMessage($msg);
+			echo "<p class=\"message", ($error ? ' error' : ''), "\" role=\"", ($error ? 'alert' : 'status'), "\">{$msg}</p>\n";
+		}
+
+		/** Messages from the language file that report a failure, see isErrorMessage(). */
+		private $errorMessages = null;
+
+		/**
+		 * Tells failure messages ("Table creation failed.") from success
+		 * messages, so they can be shown differently. Pages pass the
+		 * translated text, so this looks it up by the language keys that
+		 * name failures.
+		 */
+		function isErrorMessage($msg) {
+			global $lang;
+
+			if ($this->errorMessages === null) {
+				$this->errorMessages = array();
+				foreach ($lang as $key => $text) {
+					if (is_string($text) && $text !== ''
+						&& preg_match('/(bad|failed|needs|error|invalid|notfound|disallowed|specifytable)/', $key)) {
+						$this->errorMessages[] = $text;
+					}
+				}
+			}
+			$msg = (string) $msg;
+			foreach ($this->errorMessages as $text) {
+				if (strncmp($msg, $text, strlen($text)) === 0) return true;
+			}
+			return false;
 		}
 
 		/**
@@ -463,6 +490,34 @@
 				}
 			}
 
+			// Session settings travel in the connection's startup packet (via
+			// libpq's environment variables, so the host:port handling stays as
+			// it is) instead of costing a SET statement each after connecting.
+			// We work on UTF-8 only encoding.
+			$startup = array('PGCLIENTENCODING' => 'UTF8');
+			$options = array('DateStyle=ISO');
+			// bytea_output only exists from 9.0 on, and the version is only
+			// known once we have connected to this server before.
+			$bytea_at_startup = isset($server_info['pgVersion'])
+				&& version_compare($server_info['pgVersion'], '9.0', '>=');
+			if ($bytea_at_startup)
+				$options[] = 'bytea_output=escape';
+			if (isset($conf['statement_timeout']) && $conf['statement_timeout'] !== '') {
+				$_timeout = preg_replace('/\s+/', '', (string) $conf['statement_timeout']);
+				if (preg_match('/^[0-9]+(ms|s|min|h|d)?$/', $_timeout))
+					$options[] = "statement_timeout={$_timeout}";
+				else
+					trigger_error("Ignoring invalid \$conf['statement_timeout']", E_USER_WARNING);
+			}
+			$_prev_options = getenv('PGOPTIONS');
+			$startup['PGOPTIONS'] = trim(($_prev_options === false ? '' : $_prev_options) . ' -c ' . implode(' -c ', $options));
+
+			$_saved_env = array();
+			foreach ($startup as $_name => $_value) {
+				$_saved_env[$_name] = getenv($_name);
+				putenv("{$_name}={$_value}");
+			}
+
 			// Create the connection object and make the connection
 			$_connection = new Connection(
 				$server_info['host'],
@@ -473,6 +528,10 @@
 				$database
 			);
 
+			// Don't hand these to child processes (pg_dump).
+			foreach ($_saved_env as $_name => $_value)
+				putenv($_value === false ? $_name : "{$_name}={$_value}");
+
 			// Get the name of the database driver we need to use.
 			// The description of the server is returned in $platform.
 			$_type = $_connection->getDriver($platform);
@@ -481,7 +540,8 @@
 				exit;
 			}
 			$this->setServerInfo('platform', $platform, $server_id);
-			$this->setServerInfo('pgVersion', $_connection->conn->ServerInfo()['version'], $server_id);
+			// Without the detailed info: that would cost a "select version()".
+			$this->setServerInfo('pgVersion', $_connection->conn->ServerInfo(false)['version'], $server_id);
 
 			// Create a database wrapper class for easy manipulation of the
 			// connection.
@@ -489,10 +549,12 @@
 			$data = new $_type($_connection->conn);
 			$data->platform = $_connection->platform;
 
-			/* we work on UTF-8 only encoding */
-			$data->execute("SET client_encoding TO 'UTF-8'");
+			// Only needed when the startup settings above didn't apply.
+			if (pg_parameter_status($_connection->conn->_connectionID, 'client_encoding') !== 'UTF8') {
+				$data->execute("SET client_encoding TO 'UTF-8'");
+			}
 
-			if ($data->hasByteaHexDefault()) {
+			if ($data->hasByteaHexDefault() && !$bytea_at_startup) {
 				$data->execute("SET bytea_output TO escape");
 			}
 
@@ -506,21 +568,33 @@
 		 * @param $title The title of the page
 		 * @param $script script tag
 		 */
-		function printHeader($title = '', $script = null, $frameset = false) {
+		/**
+		 * True when the page was requested by the app shell (js/app.js) to
+		 * swap into the main area. Such responses leave out the sidebar.
+		 */
+		function isPartialRequest() {
+			return ($_SERVER['HTTP_X_PPA_PARTIAL'] ?? '') === '1';
+		}
+
+		/**
+		 * URL of a static asset with the app version appended, so browsers
+		 * can cache it for a long time and still pick up a new release.
+		 */
+		function asset($path) {
+			global $appVersion;
+			return $path . '?v=' . rawurlencode($appVersion);
+		}
+
+		function printHeader($title = '', $script = null) {
 			global $appName, $lang, $_no_output, $conf, $plugin_manager;
 
 			if (!isset($_no_output)) {
 				header("Content-Type: text/html; charset=utf-8");
-				// Send XHTML headers, or regular XHTML strict headers
-				echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
-				if ($frameset == true) {
-					echo "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\">\n";
-				} else if (isset($conf['use_xhtml_strict']) && $conf['use_xhtml_strict']) {
-					echo "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-Strict.dtd\">\n";
-				} else {
-					echo "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n";
-				}
-				echo "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"{$lang['applocale']}\" lang=\"{$lang['applocale']}\"";
+				// The response differs with and without the sidebar.
+				header("Vary: X-PPA-Partial", false);
+
+				echo "<!DOCTYPE html>\n";
+				echo "<html lang=\"", htmlspecialchars($lang['applocale']), "\"";
 				if (strcasecmp($lang['applangdir'], 'ltr') != 0) echo " dir=\"", htmlspecialchars($lang['applangdir']), "\"";
 				echo ">\n";
 
@@ -531,50 +605,36 @@
 					$_formatTitle = htmlspecialchars($appName);
 				}
 
+				$theme = htmlspecialchars($conf['theme']);
+				$css = htmlspecialchars($this->asset("themes/{$conf['theme']}/global.css"));
+				// Not every theme has its own icons.
+				$favicon = is_file("images/themes/{$conf['theme']}/Favicon.ico")
+					? "images/themes/{$theme}/Favicon.ico" : 'images/themes/default/Favicon.ico';
+				$appicon = htmlspecialchars($this->icon('Introduction'));
+				$jquery = htmlspecialchars($this->asset('libraries/js/jquery.js'));
+				$appjs = htmlspecialchars($this->asset('js/app.js'));
+				$treejs = htmlspecialchars($this->asset('js/tree.js'));
+
 				echo <<<EOL
 				<head>
-					<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-					<link rel="stylesheet" href="themes/{$conf['theme']}/global.css" type="text/css" id="csstheme" />
-					<link rel="shortcut icon" href="images/themes/{$conf['theme']}/Favicon.ico" type="image/vnd.microsoft.icon" />
-					<link rel="icon" type="image/png" href="images/themes/{$conf['theme']}/Introduction.png" />
-					<script type="text/javascript" src="libraries/js/jquery.js"></script>
-
-					<script type="text/javascript">
-						$(function() {
-							if (window.parent.frames.length > 1) {
-								$('#csstheme', window.parent.frames[0].document).attr('href','themes/{$conf['theme']}/global.css');
-							}
-						});
-
-				EOL;
-				$requestMethod = $_SERVER['REQUEST_METHOD'] ?? '';
-				if (!$frameset) echo <<<EOL
-
-						if ("{$requestMethod}" === "GET" && (window.self === window.top) && (!window.opener)) {
-							$.post(new URL('./', location.href).href, { _originalPath: location.href }, function (data) {
-								// GET request from outside frame. Reload encapsulated in our frameset.
-								document.write(data);
-
-								history.replaceState({}, '', new URL('./', location.href).href);
-							});
-						}
-
-						$(function() {
-							top.document.title = document.title;
-						});
-
-
-				EOL;
-
-				echo <<<EOL
-					</script>
-
+					<meta charset="utf-8" />
+					<meta name="viewport" content="width=device-width, initial-scale=1" />
+					<link rel="stylesheet" href="{$css}" id="csstheme" data-theme="{$theme}" />
+					<link rel="shortcut icon" href="{$favicon}" type="image/vnd.microsoft.icon" />
+					<link rel="icon" type="image/png" href="{$appicon}" />
+					<script src="{$jquery}"></script>
+					<script src="{$appjs}"></script>
+					<script src="{$treejs}"></script>
 					<title>{$_formatTitle}</title>
 
 				EOL;
 
-
-				if ($script) echo "{$script}\n";
+				if ($script) {
+					// Version our own scripts and stylesheets like the ones above.
+					$script = preg_replace_callback('/\b(src|href)="((?:js|libraries\/js|themes|plugins)\/[^"?]+\.(?:js|css)|[a-z_]+\.js)"/',
+						function ($m) { return $m[1] . '="' . htmlspecialchars($this->asset($m[2])) . '"'; }, $script);
+					echo "{$script}\n";
+				}
 
 				$plugins_head = array();
 				$_params = array('heads' => &$plugins_head);
@@ -598,31 +658,92 @@
 			global $lang, $_no_bottom_link;
 
 			if ($doBody) {
-				if (isset($_reload_browser)) $this->printReload(false);
-				elseif (isset($_reload_drop_database)) $this->printReload(true);
+				// A full page load builds the tree from scratch anyway, so
+				// only a swapped-in page has to ask for a refresh.
+				if ($this->isPartialRequest()) {
+					if (isset($_reload_browser)) $this->printReload(false);
+					elseif (isset($_reload_drop_database)) $this->printReload(true);
+				}
 				if (!isset($_no_bottom_link))
 					echo "<a href=\"#\" class=\"bottom_link\">".$lang['strgotoppage']."</a>";
 
+				if ($this->shellOpen) {
+					echo "</main>\n</div>\n";
+					$this->shellOpen = false;
+				}
 				echo "</body>\n";
 			}
 			echo "</html>\n";
 		}
 
+		/** True between printBody() and printFooter() when the app shell is open. */
+		public $shellOpen = false;
+
 		/**
-		 * Prints the page body.
-		 * @param $doBody True to output body tag, false otherwise
+		 * Prints the page body, and around it the app shell: the sidebar with
+		 * the object tree and the main area the page content goes into.
+		 * Set global $_no_shell for pages that are shown on their own (help
+		 * popups and the like).
 		 * @param $bodyClass - name of body class
+		 * @param $doBody True to output body tag, false otherwise
 		 */
 		function printBody($bodyClass = '', $doBody = true ) {
-			global $_no_output;
+			global $_no_output, $_no_shell, $lang, $conf;
 
 			if (!isset($_no_output)) {
 				if ($doBody) {
+					if (!isset($_no_shell)) $bodyClass = trim("ppa-shell {$bodyClass}");
 					$bodyClass = htmlspecialchars($bodyClass);
 					echo "<body", ($bodyClass == '' ? '' : " class=\"{$bodyClass}\"");
 					echo ">\n";
+
+					if (!isset($_no_shell)) {
+						$width = (int) ($conf['left_width'] ?? 200);
+						if ($width < 120) $width = 200;
+						echo "<div id=\"ppa-app\" style=\"--ppa-sidebar-width: {$width}px\" data-load-error=\"",
+							htmlspecialchars($lang['strpageloaderror']), "\" data-close=\"", htmlspecialchars($lang['strclose']),
+							"\" data-discard=\"", htmlspecialchars($lang['strdiscardchanges']), "\">\n";
+						if (!$this->isPartialRequest()) $this->printSidebar();
+						echo "<main id=\"ppa-main\" tabindex=\"-1\">\n";
+						$this->shellOpen = true;
+					}
 				}
 			}
+		}
+
+		/**
+		 * Prints the sidebar: app name, tree filter and the object tree.
+		 * The tree itself is built in the browser by js/tree.js from the
+		 * same XML the old frame-based tree used.
+		 */
+		function printSidebar() {
+			global $appName, $appVersion, $lang, $conf;
+
+			$cfg = array(
+				'src' => 'servers.php?action=tree',
+				'rootText' => $lang['strservers'],
+				'rootAction' => 'servers.php',
+				'rootIcon' => $this->icon('Servers'),
+				'loadingText' => $lang['strloading'],
+				'errorText' => $lang['strerrorloading'],
+				'errorIcon' => $this->icon('ObjectNotFound'),
+				'noMatchText' => $lang['strnotreematch'],
+			);
+			echo "<aside id=\"ppa-sidebar\" aria-label=\"", htmlspecialchars($lang['strobjectbrowser']), "\">\n";
+			// "logo" picks up each theme's logo styling.
+			echo "\t<div class=\"logo ppa-brand\"><a href=\"intro.php\" title=\"", htmlspecialchars("{$appName} {$appVersion}"), "\">",
+				htmlspecialchars($appName), "</a></div>\n";
+			echo "\t<div class=\"ppa-tree-tools\">\n";
+			echo "\t\t<input type=\"search\" id=\"ppa-tree-filter\" placeholder=\"", htmlspecialchars($lang['strfiltertree']),
+				" (Ctrl+K)\" aria-label=\"", htmlspecialchars($lang['strfiltertree']), "\" autocomplete=\"off\" spellcheck=\"false\" />\n";
+			echo "\t\t<button type=\"button\" id=\"ppa-tree-refresh\" title=\"", htmlspecialchars($lang['strrefresh']), "\" aria-label=\"",
+				htmlspecialchars($lang['strrefresh']), "\"><img src=\"", htmlspecialchars($this->icon('Refresh')), "\" alt=\"\" /></button>\n";
+			echo "\t</div>\n";
+			echo "\t<div id=\"ppa-tree\" data-config=\"", htmlspecialchars(json_encode($cfg)), "\"></div>\n";
+			echo "\t<div id=\"ppa-sidebar-resize\" role=\"separator\" aria-orientation=\"vertical\" title=\"", htmlspecialchars($lang['strresizesidebar']), "\"></div>\n";
+			echo "</aside>\n";
+			echo "<button type=\"button\" id=\"ppa-sidebar-toggle\" aria-controls=\"ppa-sidebar\" aria-expanded=\"false\" title=\"",
+				htmlspecialchars($lang['strtogglesidebar']), "\"><span aria-hidden=\"true\">&#9776;</span></button>\n";
 		}
 
 		/**
@@ -630,12 +751,7 @@
 		 * @param $database True if dropping a database, false otherwise
 		 */
 		function printReload($database) {
-			echo "<script type=\"text/javascript\">\n";
-			if ($database)
-				echo "\tparent.frames.browser.location.href=\"browser.php\";\n";
-			else
-				echo "\tparent.frames.browser.location.reload();\n";
-			echo "</script>\n";
+			echo "<script>window.ppa && ppa.reloadTree(", ($database ? 'true' : 'false'), ");</script>\n";
 		}
 
 		/**
@@ -699,40 +815,33 @@
 				$tabs = $this->getNavTabs($tabs);
 			}
 
-			echo "<table class=\"tabs\"><tr>\n";
-			#echo "<div class=\"tabs\">\n";
-
-			if (count($tabs) > 0)
-				$width = (int)(100 / count($tabs)).'%';
-			else
-				$width = 1;
+			echo "<nav class=\"tabs\" aria-label=\"", htmlspecialchars($lang['strsections']), "\"><ul>\n";
 
 			foreach ($tabs as $tab_id => $tab) {
-				$active = ($tab_id == $activetab) ? ' active' : '';
+				$isActive = ($tab_id == $activetab);
 
 				if (!isset($tab['hide']) || $tab['hide'] !== true) {
-					$tablink = '<a href="' . htmlentities($this->getActionUrl($tab, $_REQUEST)) . '">';
+					$tablink = '<a href="' . htmlentities($this->getActionUrl($tab, $_REQUEST)) . '"'
+						. ($isActive ? ' aria-current="page"' : '') . '>';
 
+					// The label says it all; the icon is decoration.
 					if (isset($tab['icon']) && $icon = $this->icon($tab['icon']))
-						$tablink .= "<span class=\"icon\"><img src=\"{$icon}\" alt=\"{$tab['title']}\" /></span>";
+						$tablink .= "<span class=\"icon\"><img src=\"{$icon}\" alt=\"\" /></span>";
 
 					$tablink .= "<span class=\"label\">{$tab['title']}</span></a>";
 
-					echo "<td style=\"width: {$width}\" class=\"tab{$active}\">";
-					#echo "<span class=\"tab{$active}\" style=\"white-space:nowrap;\">";
+					echo "<li class=\"tab", ($isActive ? ' active' : ''), "\">";
 
 					if (isset($tab['help']))
 						$this->printHelp($tablink, $tab['help']);
 					else
 						echo $tablink;
 
-					echo "</td>\n";
-					#echo "</span>\n";
+					echo "</li>\n";
 				}
 			}
 
-			echo "</tr></table>\n";
-			#echo "</div>\n";
+			echo "</ul></nav>\n";
 		}
 
 		/**
@@ -1356,7 +1465,7 @@
 				echo '<div class="alert-banner"><p><a href="https://www.php.net/manual/en/session.configuration.php#ini.session.cookie-samesite" target="_blank" rel="noopener noreferrer">', htmlspecialchars($lang['sessionsecuritywarning']), '</a></p></div>';
 			}
 
-			echo "<div class=\"topbar\"><table style=\"width: 100%\"><tr><td>";
+			echo "<div class=\"topbar\">\n<div class=\"topbar-info\">";
 
 			if ($server_info && isset($server_info['platform']) && isset($server_info['username'])) {
 				/* top left information when connected */
@@ -1366,7 +1475,7 @@
 					'<span class="port">'.htmlspecialchars($server_info['port']).'</span>',
 					'<span class="username">'.htmlspecialchars($server_info['username']).'</span>');
 
-				echo "</td>";
+				echo "</div>\n";
 
 				/* top right information when connected */
 
@@ -1379,7 +1488,6 @@
 									'action' => 'sql'
 								))
 							),
-							'target' => "sqledit",
 							'id' => 'toplink_sql',
 						),
 						'content' => $lang['strsql']
@@ -1404,7 +1512,6 @@
 									'action' => 'find'
 								))
 							),
-							'target' => "sqledit",
 							'id' => 'toplink_find',
 						),
 						'content' => $lang['strfind']
@@ -1431,64 +1538,22 @@
 
 				$plugin_manager->do_hook('toplinks', $plugin_functions_parameters);
 
-				echo "<td style=\"text-align: right\">";
+				echo "<nav class=\"topbar-links\" aria-label=\"", htmlspecialchars($lang['strtools']), "\">";
 				$this->printLinksList($toplinks, 'toplink');
-				echo "</td>";
-
-				$sql_window_id = htmlentities('sqledit:'.$_REQUEST['server']);
-				$history_window_id = htmlentities('history:'.$_REQUEST['server']);
-
-				echo "<script type=\"text/javascript\">
-						$('#toplink_sql').on('click', function() {
-							window.open($(this).attr('href'),'{$sql_window_id}','toolbar=no,width=700,height=500,resizable=yes,scrollbars=yes').focus();
-							return false;
-						});
-
-						$('#toplink_history').on('click', function() {
-							window.open($(this).attr('href'),'{$history_window_id}','toolbar=no,width=700,height=500,resizable=yes,scrollbars=yes').focus();
-							return false;
-						});
-
-						$('#toplink_find').on('click', function() {
-							window.open($(this).attr('href'),'{$sql_window_id}','toolbar=no,width=700,height=500,resizable=yes,scrollbars=yes').focus();
-							return false;
-						});
-						";
+				echo "</nav>\n";
 
 				if (isset($_SESSION['sharedUsername'])) {
-					printf("
+					printf("<script>
 						$('#toplink_logout').on('click', function() {
-							return confirm('%s');
-						});", str_replace("'", "\'", $lang['strconfdropcred']));
+							return confirm(%s);
+						});
+					</script>\n", json_encode($lang['strconfdropcred']));
 				}
-
-				echo "
-				</script>";
 			}
 			else {
-				echo "<span class=\"appname\">{$appName}</span> <span class=\"version\">{$appVersion}</span>";
+				echo "<span class=\"appname\">{$appName}</span> <span class=\"version\">{$appVersion}</span></div>\n";
 			}
-/*
-			echo "<td style=\"text-align: right; width: 1%\">";
-
-			echo "<form method=\"get\"><select name=\"language\" onchange=\"this.form.submit()\">\n";
-			$language = isset($_SESSION['webdbLanguage']) ? $_SESSION['webdbLanguage'] : 'english';
-			foreach ($appLangFiles as $k => $v) {
-				echo "<option value=\"{$k}\"",
-					($k == $language) ? ' selected="selected"' : '',
-					">{$v}</option>\n";
-			}
-			echo "</select>\n";
-			echo "<noscript><input type=\"submit\" value=\"Set Language\"></noscript>\n";
-			foreach ($_GET as $key => $val) {
-				if ($key == 'language') continue;
-				echo "<input type=\"hidden\" name=\"$key\" value=\"", htmlspecialchars($val), "\" />\n";
-			}
-			echo "</form>\n";
-
-			echo "</td>";
-*/
-			echo "</tr></table></div>\n";
+			echo "</div>\n";
 		}
 
 		/**
@@ -1503,10 +1568,13 @@
 				$trail = $this->getTrail($trail);
 			}
 
-			echo "<div class=\"trail\"><table><tr>";
+			echo "<nav class=\"trail\" aria-label=\"", htmlspecialchars($lang['strbreadcrumb']), "\"><ol>";
 
+			$last = count($trail);
+			$n = 0;
 			foreach ($trail as $crumb) {
-				echo "<td class=\"crumb\">";
+				$n++;
+				echo "<li class=\"crumb\">";
 				$crumblink = "<a";
 
 				if (isset($crumb['url']))
@@ -1515,15 +1583,14 @@
 				if (isset($crumb['title']))
 					$crumblink .= " title=\"{$crumb['title']}\"";
 
+				if ($n == $last)
+					$crumblink .= " aria-current=\"location\"";
+
 				$crumblink .= ">";
 
-				if (isset($crumb['title']))
-					$iconalt = $crumb['title'];
-				else
-					$iconalt = 'Database Root';
-
+				// The label carries the name; the icon is decoration.
 				if (isset($crumb['icon']) && $icon = $this->icon($crumb['icon']))
-					$crumblink .= "<span class=\"icon\"><img src=\"{$icon}\" alt=\"{$iconalt}\" /></span>";
+					$crumblink .= "<span class=\"icon\"><img src=\"{$icon}\" alt=\"\" /></span>";
 
 				$crumblink .= "<span class=\"label\">" . htmlspecialchars($crumb['text']) . "</span></a>";
 
@@ -1532,11 +1599,11 @@
 				else
 					echo $crumblink;
 
-				echo "{$lang['strseparator']}";
-				echo "</td>";
+				echo "<span class=\"sep\" aria-hidden=\"true\">{$lang['strseparator']}</span>";
+				echo "</li>";
 			}
 
-			echo "</tr></table></div>\n";
+			echo "</ol></nav>\n";
 		}
 
 		/**
@@ -1714,60 +1781,122 @@
 		/**
 		 * Do multi-page navigation.  Displays the prev, next and page options.
 		 * @param $page - the page currently viewed
-		 * @param $pages - the maximum number of pages
+		 * @param $pages - the maximum number of pages, an estimate if $opts['estimated'],
+		 *                 or null when the number of pages is unknown
 		 * @param $gets -  the parameters to include in the link to the wanted page
 		 * @param $max_width - the number of pages to make available at any one time (default = 20)
+		 * @param $opts - 'has_next' => whether there is a page after this one (defaults to
+		 *                $page < $pages), 'estimated' => true if $pages is an estimate,
+		 *                'label' => accessible name of the navigation
 		 */
-		function printPages($page, $pages, $gets, $max_width = 20) {
+		function printPages($page, $pages, $gets, $max_width = 20, $opts = array()) {
 			global $lang;
 
 			$window = 10;
 
-			if ($page < 0 || $page > $pages) return;
-			if ($pages < 0) return;
-			if ($max_width <= 0) return;
+			if (!is_numeric($page) || $max_width <= 0) return;
+			$page = (int)$page;
+			if ($page < 1) return;
+
+			// Only a known, exact number of pages gives a "Last" link
+			$known = ($pages !== null && empty($opts['estimated']));
+			if ($pages !== null) {
+				$pages = (int)$pages;
+				if ($pages < 0) return;
+				if ($known && $page > $pages) return;
+			}
+			$has_next = isset($opts['has_next']) ? (bool)$opts['has_next'] : ($pages !== null && $page < $pages);
+
+			// The last page number we can list
+			if ($known) $last = $pages;
+			elseif (!$has_next) $last = $page;
+			elseif ($pages !== null) $last = max($pages, $page + 1);
+			else $last = $page + 1;
+
+			if ($last <= 1) return;
 
 			unset ($gets['page']);
-			$url = http_build_query($gets);
+			$url = 'display.php?' . http_build_query($gets, '', '&amp;');
+			if (count($gets) > 0) $url .= '&amp;';
+			$url .= 'page=';
 
-			if ($pages > 1) {
-				echo "<p style=\"text-align: center\">\n";
-				if ($page != 1) {
-					echo "<a class=\"pagenav\" href=\"?{$url}&amp;page=1\">{$lang['strfirst']}</a>\n";
-					$temp = $page - 1;
-					echo "<a class=\"pagenav\" href=\"?{$url}&amp;page={$temp}\">{$lang['strprev']}</a>\n";
-				}
-
-				if ($page <= $window) {
-					$min_page = 1;
-					$max_page = min(2 * $window, $pages);
-				}
-				elseif ($page > $window && $pages >= $page + $window) {
-					$min_page = ($page - $window) + 1;
-					$max_page = $page + $window;
-				}
-				else {
-					$min_page = ($page - (2 * $window - ($pages - $page))) + 1;
-					$max_page = $pages;
-				}
-
-				// Make sure min_page is always at least 1
-				// and max_page is never greater than $pages
-				$min_page = max($min_page, 1);
-				$max_page = min($max_page, $pages);
-
-				for ($i = $min_page; $i <= $max_page; $i++) {
-					#if ($i != $page) echo "<a class=\"pagenav\" href=\"?{$url}&amp;page={$i}\">$i</a>\n";
-					if ($i != $page) echo "<a class=\"pagenav\" href=\"display.php?{$url}&amp;page={$i}\">$i</a>\n";
-					else echo "$i\n";
-				}
-				if ($page != $pages) {
-					$temp = $page + 1;
-					echo "<a class=\"pagenav\" href=\"display.php?{$url}&amp;page={$temp}\">{$lang['strnext']}</a>\n";
-					echo "<a class=\"pagenav\" href=\"display.php?{$url}&amp;page={$pages}\">{$lang['strlast']}</a>\n";
-				}
-				echo "</p>\n";
+			$label = isset($opts['label']) ? $opts['label'] : $lang['strpagination'];
+			echo "<nav class=\"pagination\" aria-label=\"", htmlspecialchars($label), "\">\n";
+			if ($page != 1) {
+				echo "<a class=\"pagenav\" href=\"{$url}1\">", htmlspecialchars($lang['strfirst']), "</a>\n";
+				$temp = $page - 1;
+				echo "<a class=\"pagenav\" rel=\"prev\" href=\"{$url}{$temp}\">", htmlspecialchars($lang['strprev']), "</a>\n";
 			}
+
+			if ($page <= $window) {
+				$min_page = 1;
+				$max_page = min(2 * $window, $last);
+			}
+			elseif ($page > $window && $last >= $page + $window) {
+				$min_page = ($page - $window) + 1;
+				$max_page = $page + $window;
+			}
+			else {
+				$min_page = ($page - (2 * $window - ($last - $page))) + 1;
+				$max_page = $last;
+			}
+
+			// Make sure min_page is always at least 1
+			// and max_page is never greater than $last
+			$min_page = max($min_page, 1);
+			$max_page = min($max_page, $last);
+
+			for ($i = $min_page; $i <= $max_page; $i++) {
+				if ($i != $page) echo "<a class=\"pagenav\" href=\"{$url}{$i}\">{$i}</a>\n";
+				else echo "<span class=\"pagenav current\" aria-current=\"page\">{$i}</span>\n";
+			}
+			// More pages than we can tell
+			if (!$known && $has_next && $max_page >= $last) echo "<span class=\"pagenav gap\">&hellip;</span>\n";
+
+			if ($has_next) {
+				$temp = $page + 1;
+				echo "<a class=\"pagenav\" rel=\"next\" href=\"{$url}{$temp}\">", htmlspecialchars($lang['strnext']), "</a>\n";
+				if ($known)
+					echo "<a class=\"pagenav\" href=\"{$url}{$pages}\">", htmlspecialchars($lang['strlast']), "</a>\n";
+			}
+			echo "</nav>\n";
+		}
+
+		/**
+		 * Remembers a query in the session, so that pages and links can refer to it
+		 * by a short token instead of sharing the single "current query": two browser
+		 * tabs can then page through different results.  Also sets it as the current
+		 * query ($_SESSION['sqlquery']) for the code that still reads that.
+		 * @param $sql The SQL query
+		 * @return string The token (16 hex digits)
+		 */
+		function storeQuery($sql) {
+			$sql = (string)$sql;
+			$token = substr(sha1($sql), 0, 16);
+
+			if (!isset($_SESSION['ppaQueries']) || !is_array($_SESSION['ppaQueries']))
+				$_SESSION['ppaQueries'] = array();
+
+			// Move it to the end, the most recently used, and keep the 20 latest
+			unset($_SESSION['ppaQueries'][$token]);
+			$_SESSION['ppaQueries'][$token] = $sql;
+			if (count($_SESSION['ppaQueries']) > 20)
+				$_SESSION['ppaQueries'] = array_slice($_SESSION['ppaQueries'], -20, null, true);
+
+			$_SESSION['sqlquery'] = $sql;
+
+			return $token;
+		}
+
+		/**
+		 * Returns a query remembered with storeQuery()
+		 * @param $token The token storeQuery() returned
+		 * @return string|null The query, or null if the token is unknown
+		 */
+		function getStoredQuery($token) {
+			if (!is_string($token) || !preg_match('/^[0-9a-f]{16}$/', $token)) return null;
+			if (!isset($_SESSION['ppaQueries'][$token])) return null;
+			return $_SESSION['ppaQueries'][$token];
 		}
 
 		/**
@@ -1803,11 +1932,8 @@
 		 *        attached to the name.
 		 */
 		function setWindowName($name, $addServer = true) {
-			echo "<script type=\"text/javascript\">\n";
-			echo "//<![CDATA[\n";
-			echo "   window.name = '{$name}", ($addServer ? ':'.htmlspecialchars($_REQUEST['server']) : ''), "';\n";
-			echo "//]]>\n";
-			echo "</script>\n";
+			// Pages used to name their popup window. Everything lives in one
+			// window now, so there is nothing to name.
 		}
 
 		/**
@@ -1984,7 +2110,7 @@
 				}
 
 				if ($ma !== null) {
-					echo "<script src=\"multiactionform.js\" type=\"text/javascript\"></script>\n";
+					echo "<script src=\"", htmlspecialchars($this->asset('multiactionform.js')), "\"></script>\n";
 					echo "<form id=\"multi_form\" action=\"{$ma['url']}\" method=\"post\" enctype=\"multipart/form-data\">\n";
 					if (isset($ma['vars']))
 						foreach ($ma['vars'] as $k => $v)
@@ -2612,17 +2738,22 @@
 
 		/**
 		 * Save the given SQL script in the history
-		 * of the database and server.
+		 * of the database and server. Only the most recent 50 entries
+		 * per server and database are kept.
 		 * @param $script the SQL script to save.
 		 */
 		function saveScriptHistory($script) {
+			$max = 50;
 			list($usec, $sec) = explode(' ', microtime());
 			$time = ((float)$usec + (float)$sec);
-			$_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']]["$time"] = array(
+			$history =& $_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']];
+			$history["$time"] = array(
 				'query' => $script,
 				'paginate' => (!isset($_REQUEST['paginate'])? 'f':'t'),
 				'queryid' => $time,
 			);
+			if (count($history) > $max)
+				$history = array_slice($history, -$max, null, true);
 		}
 
 		/*
@@ -2779,7 +2910,7 @@
 
 				$fksprops['code'] .= '<div id="fkbg"></div>';
 				$fksprops['code'] .= '<div id="fklist"></div>';
-				$fksprops['code'] .= '<script src="js/ac_insert_row.js" type="text/javascript"></script>';
+				$fksprops['code'] .= '<script src="' . htmlspecialchars($this->asset('js/ac_insert_row.js')) . '"></script>';
 			}
 
 			else /* we have no foreign keys on this table */

@@ -64,7 +64,7 @@ class Postgres83 extends Postgres84 {
 	 * 
 	 * @return A list of databases, sorted alphabetically
 	 */
-	function getDatabases($currentdatabase = NULL) {
+	function getDatabases($currentdatabase = NULL, $withSize = false) {
 		global $conf, $misc;
 
 		$server_info = $misc->getServerInfo();
@@ -88,11 +88,13 @@ class Postgres83 extends Postgres84 {
 		else
 			$where = ' AND pdb.datallowconn';
 
+		$dbsize = $withSize ? 'pg_catalog.pg_database_size(pdb.oid)' : 'NULL';
+
 		$sql = "
 			SELECT pdb.datname AS datname, pr.rolname AS datowner, pg_encoding_to_char(encoding) AS datencoding,
 				(SELECT description FROM pg_catalog.pg_shdescription pd WHERE pdb.oid=pd.objoid AND pd.classoid='pg_database'::regclass) AS datcomment,
 				(SELECT spcname FROM pg_catalog.pg_tablespace pt WHERE pt.oid=pdb.dattablespace) AS tablespace,
-				pg_catalog.pg_database_size(pdb.oid) as dbsize
+				{$dbsize} as dbsize
 			FROM pg_catalog.pg_database pdb LEFT JOIN pg_catalog.pg_roles pr ON (pdb.datdba = pr.oid)
 			WHERE true
 				{$where}
@@ -320,6 +322,16 @@ class Postgres83 extends Postgres84 {
 			return $this->execute($sql);
 		}
 		return 0;
+	}
+
+	// Table functions
+
+	/**
+	 * No row estimate before 8.4 (it needs WITH RECURSIVE): browsing always
+	 * counts the rows exactly, as it used to.
+	 */
+	function getTableRowEstimate($table) {
+		return null;
 	}
 
 	// Function functions
