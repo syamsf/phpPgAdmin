@@ -15,6 +15,27 @@ kept it alive with PHP 8 fixes, and this repo builds on that. What's added here:
 - a reworked UI: one page instead of frames, a SQL editor, faster browsing of
   big tables (see below)
 
+## Screenshots
+
+![Browsing a table: the object tree on the left, filters and page size above the grid](docs/screenshot/browse.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshot/sql-editor.png" alt="SQL editor suggesting the tables of a schema"><br><sub>SQL editor: suggestions while typing</sub></td>
+    <td width="50%"><img src="docs/screenshot/sql-results.png" alt="Query results under the SQL editor"><br><sub>Results under the editor</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshot/edit-panel.png" alt="Editing a row in a panel next to the grid"><br><sub>Editing a row in a side panel</sub></td>
+    <td width="50%"><img src="docs/screenshot/dark.png" alt="The dark theme"><br><sub>Dark theme</sub></td>
+  </tr>
+</table>
+
+<p>
+  <img src="docs/screenshot/phone.png" alt="A table on a phone" width="260">
+  &nbsp;
+  <img src="docs/screenshot/phone-sidebar.png" alt="The object tree slid in on a phone" width="260">
+</p>
+
 ## Using it
 
 - Every page has its own address, so bookmarks, reloads, new tabs and the
@@ -178,7 +199,12 @@ You need Docker with the Compose plugin and Python 3. `BROWSER=1` also runs
 the scripts in `tests/browser` against the app in headless Chrome (the app
 shell, the SQL editor and the data grid); it needs Node and Chrome
 (`npm ci --prefix tests/browser` once; set `CHROME` if Chrome isn't at
-`/usr/bin/google-chrome`). The crawler skips
+`/usr/bin/google-chrome`).
+
+The pictures in `docs/screenshot` come from `tests/browser/screenshots.mjs`:
+start the test site with `KEEP=1 tests/run.sh` and run
+`node tests/browser/screenshots.mjs http://127.0.0.1:8080/`. It adds sample
+rows to the test database first. The crawler skips
 actions that drop, empty or change things on a GET, but it does click a lot,
 so don't point `crawl.py` at a database you care about.
 
