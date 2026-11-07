@@ -21,3 +21,4 @@ libraries/adodb/*.dtd
 libraries/adodb/drivers/adodb-text.inc.php
 *.md
 .claude
+docs

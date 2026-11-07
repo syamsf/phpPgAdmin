@@ -143,6 +143,12 @@ body.ppa-shell {
 	overflow-x: auto;
 	outline: none;
 }
+/* Text boxes have fixed cols/size; never wider than the page (phones). */
+#ppa-main textarea,
+#ppa-main input[type="text"] {
+	max-width: 100%;
+	box-sizing: border-box;
+}
 .ppa-brand {
 	flex: none;
 }
