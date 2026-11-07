@@ -292,7 +292,7 @@
 			'function' => array(
 				'title' => $lang['strfunction'],
 				'field' => field('proproto'),
-				'url' => "functions.php?action=properties&amp;server={$_REQUEST['server']}&amp;database={$_REQUEST['database']}&amp;",
+				'url' => "functions.php?action=properties&{$misc->hrefRaw}&",
 				'vars' => array(
 					'schema' => 'pronamespace',
 					'function' => 'proproto',

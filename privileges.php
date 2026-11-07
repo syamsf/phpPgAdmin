@@ -340,7 +340,7 @@
 
 	switch ($action) {
 		case 'save':
-			if (isset($_REQUEST['cancel'])) doDefault();
+			if (isset($_REQUEST['cancel']) || !Misc::isPost()) doDefault();
 			else doAlter(false, $_REQUEST['mode']);
 			break;
 		case 'alter':

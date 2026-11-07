@@ -2939,6 +2939,18 @@ class Postgres extends ADODB_base {
 	}
 
 	/**
+	 * Checks that a sequence numeric option (increment, min/max value,
+	 * start value, cache value, restart value) is empty or a plain
+	 * (optionally signed) integer, since these values are placed
+	 * unquoted into the generated SQL.
+	 * @param $v The value to check
+	 * @return bool true if $v is safe to embed unquoted in SQL
+	 */
+	function isValidSeqNumber($v) {
+		return ($v === null || $v === '' || preg_match('/^[+-]?[0-9]+$/', (string)$v) === 1);
+	}
+
+	/**
 	 * Creates a new sequence
 	 * @param $sequence Sequence name
 	 * @param $increment The increment
@@ -2951,6 +2963,11 @@ class Postgres extends ADODB_base {
 	 */
 	function createSequence($sequence, $increment, $minvalue, $maxvalue,
 								$startvalue, $cachevalue, $cycledvalue) {
+		if (!$this->isValidSeqNumber($increment) || !$this->isValidSeqNumber($minvalue)
+			|| !$this->isValidSeqNumber($maxvalue) || !$this->isValidSeqNumber($startvalue)
+			|| !$this->isValidSeqNumber($cachevalue))
+			return -1;
+
 		$f_schema = $this->_schema;
 		$this->fieldClean($f_schema);
 		$this->fieldClean($sequence);
@@ -3019,11 +3036,11 @@ class Postgres extends ADODB_base {
 	 * @return 0 success
 	 */
 	function alterSequenceSchema($seqrs, $schema) {
-		/* vars are cleaned in _alterSequence */
+		/* $schema is fieldClean()ed in _alterSequence, as it is an identifier */
 		if (!empty($schema) && ($seqrs->fields['nspname'] != $schema)) {
 			$f_schema = $this->_schema;
 			$this->fieldClean($f_schema);
-			$sql = "ALTER SEQUENCE \"{$f_schema}\".\"{$seqrs->fields['seqname']}\" SET SCHEMA {$schema}";
+			$sql = "ALTER SEQUENCE \"{$f_schema}\".\"{$seqrs->fields['seqname']}\" SET SCHEMA \"{$schema}\"";
 			return $this->execute($sql);
 		}
 		return 0;
@@ -3043,6 +3060,11 @@ class Postgres extends ADODB_base {
 	 */
 	function alterSequenceProps($seqrs, $increment,	$minvalue, $maxvalue,
 								$restartvalue, $cachevalue, $cycledvalue, $startvalue) {
+		if (!$this->isValidSeqNumber($increment) || !$this->isValidSeqNumber($minvalue)
+			|| !$this->isValidSeqNumber($maxvalue) || !$this->isValidSeqNumber($restartvalue)
+			|| !$this->isValidSeqNumber($cachevalue) || !$this->isValidSeqNumber($startvalue))
+			return -1;
+
 		$sql = '';
 		/* vars are cleaned in _alterSequence */
 		if (!empty($increment) && ($increment != $seqrs->fields['increment_by'])) $sql .= " INCREMENT {$increment}";
@@ -3120,7 +3142,7 @@ class Postgres extends ADODB_base {
 			return -3;
 
 		// Schema
-		$this->clean($schema);
+		$this->fieldClean($schema);
 		$status = $this->alterSequenceSchema($seqrs, $schema);
 		if ($status != 0)
 			return -7;
@@ -5181,11 +5203,18 @@ class Postgres extends ADODB_base {
 	 * @return 0 success
 	 */
 	function createTrigger($tgname, $table, $tgproc, $tgtime, $tgevent, $tgfrequency, $tgargs) {
+		if (!in_array($tgtime, $this->triggerExecTimes, true)
+			|| !in_array($tgevent, $this->triggerEvents, true)
+			|| !in_array($tgfrequency, $this->triggerFrequency, true))
+			return -1;
+
 		$f_schema = $this->_schema;
 		$this->fieldClean($f_schema);
 		$this->fieldClean($tgname);
 		$this->fieldClean($table);
 		$this->fieldClean($tgproc);
+		$tgargs = $this->cleanTriggerArgs($tgargs);
+		if ($tgargs === false) return -1;
 
 		/* No Statement Level Triggers in PostgreSQL (by now) */
 		$sql = "CREATE TRIGGER \"{$tgname}\" {$tgtime}
@@ -5193,6 +5222,32 @@ class Postgres extends ADODB_base {
 				FOR EACH {$tgfrequency} EXECUTE PROCEDURE \"{$tgproc}\"({$tgargs})";
 
 		return $this->execute($sql);
+	}
+
+	/**
+	 * Turns the user-typed trigger argument list into a list of safely
+	 * quoted string literals. Accepted arguments, separated by commas:
+	 * single-quoted literals (with '' for an embedded quote; commas inside
+	 * them do not split), numbers, and plain unquoted words (folded to lower
+	 * case, as PostgreSQL does for unquoted names). Everything else is
+	 * rejected.
+	 * @param $tgargs The raw, user-supplied argument list
+	 * @return string|false The SQL argument list, or false if malformed
+	 */
+	function cleanTriggerArgs($tgargs) {
+		$tgargs = trim((string)$tgargs);
+		if ($tgargs === '') return '';
+		$arg = "(?:'(?:[^']|'')*'|[+-]?[0-9]+(?:\\.[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*)";
+		if (!preg_match("/^{$arg}(?:\\s*,\\s*{$arg})*$/D", $tgargs)) return false;
+		preg_match_all("/{$arg}/", $tgargs, $m);
+		$out = array();
+		foreach ($m[0] as $a) {
+			if ($a[0] === "'") $a = str_replace("''", "'", substr($a, 1, -1));
+			elseif (!is_numeric($a)) $a = strtolower($a);
+			$this->clean($a);
+			$out[] = "'{$a}'";
+		}
+		return implode(', ', $out);
 	}
 
 	/**
@@ -5503,7 +5558,7 @@ class Postgres extends ADODB_base {
  	function getFtsConfigurationMap($ftscfg) {
  		$c_schema = $this->_schema;
 		$this->clean($c_schema);
-		$this->fieldClean($ftscfg);
+		$this->clean($ftscfg);
 
  		$oidSet = $this->selectSet("SELECT c.oid
 			FROM pg_catalog.pg_ts_config AS c
@@ -5837,7 +5892,7 @@ class Postgres extends ADODB_base {
 			$this->fieldClean($f_schema);
 			$this->fieldClean($ftscfg);
 			$this->fieldClean($dictname);
-			$this->arrayClean($mapping);
+			$this->fieldArrayClean($mapping);
 
  			switch ($action) {
  				case 'alter':
@@ -5852,9 +5907,9 @@ class Postgres extends ADODB_base {
  			}
 
  			$sql = "ALTER TEXT SEARCH CONFIGURATION \"{$f_schema}\".\"{$ftscfg}\" {$whatToDo} MAPPING FOR ";
- 			$sql .= implode(",", $mapping);
+ 			$sql .= implode(",", array_map(function($m) { return "\"{$m}\""; }, $mapping));
  			if ($action !== 'drop' && !empty($dictname)) {
- 				$sql .= " WITH {$dictname}";
+ 				$sql .= " WITH \"{$dictname}\"";
  			}
 
  			return $this->execute($sql);
@@ -5890,7 +5945,8 @@ class Postgres extends ADODB_base {
 			FROM pg_catalog.ts_token_type({$cfgparser})
 			WHERE alias = '{$mapping}'");
 
- 		$tokid = $tokenIdSet->fields['tokid'];
+ 		// An unknown mapping name matches no token: use an id that matches nothing
+ 		$tokid = is_object($tokenIdSet) && isset($tokenIdSet->fields['tokid']) ? (int)$tokenIdSet->fields['tokid'] : -1;
 
  		$sql = "SELECT
 				(SELECT t.alias FROM pg_catalog.ts_token_type(c.cfgparser) AS t WHERE t.tokid = m.maptokentype) AS name,

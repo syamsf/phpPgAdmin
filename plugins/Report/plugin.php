@@ -681,7 +681,30 @@ class Report extends Plugin {
 		$reportsdb = $this->get_reportsdb();
 
 		$report = $reportsdb->getReport($_REQUEST['report_id']);
-		
+		if (!is_object($report) || $report->recordCount() != 1) {
+			$this->default_action();
+			return;
+		}
+
+		// Someone else's report is not run on sight: its SQL goes into the
+		// SQL editor, and the user has to read it and press Execute (a POST
+		// with the CSRF token). Only a user's own reports run from here.
+		$server_info = $misc->getServerInfo();
+		// Without row level security on the reports table (installs from before
+		// it was added) nobody's ownership can be trusted: every report counts
+		// as someone else's.
+		if (!$reportsdb->rowSecurityEnabled()
+				|| (string) $report->fields['created_by'] !== (string) ($server_info['username'] ?? '')) {
+			$_SESSION['sqlquery'] = $report->fields['report_sql'];
+			header('Location: database.php?' . http_build_query(array(
+				'server' => $_REQUEST['server'],
+				'database' => $report->fields['db_name'],
+				'subject' => 'database',
+				'action' => 'sql',
+			), '', '&'));
+			exit;
+		}
+
 		$_POST['query'] = $report->fields['report_sql'];
 
 		include('./sql.php');
@@ -700,14 +723,16 @@ class Report extends Plugin {
 		$misc->printTrail('server');
 		$misc->printTabs('server', 'report_plugin');
 		$misc->printMsg($msg);
-		
+		if (!$reportsdb->rowSecurityEnabled())
+			echo "<p class=\"message error\" role=\"alert\">", htmlspecialchars($this->lang['strreportsnorls']), "</p>\n";
+
 		$reports = $reportsdb->getReports();
 
 		$columns = array(
 			'report' => array(
 				'title' => $this->lang['strreport'],
 				'field' => field('report_name'),
-				'url'   => "plugin.php?plugin={$this->name}&amp;action=properties&amp;{$misc->href}&amp;",
+				'url'   => "plugin.php?plugin={$this->name}&action=properties&{$misc->hrefRaw}&",
 				'vars'  => array(
 					'report_id' => 'report_id',
 					'report' => 'report_name'

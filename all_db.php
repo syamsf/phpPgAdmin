@@ -168,6 +168,7 @@
 		$tablespaces = $data->hasTablespaces() ? $data->getTablespaces() : null;
 
 		echo "<form action=\"all_db.php\" method=\"post\">\n";
+		echo $misc->csrfField();
 		echo "<table>\n";
 		echo "\t<tr>\n\t\t<th class=\"data left required\">{$lang['strname']}</th>\n";
 		echo "\t\t<td class=\"data1\"><input name=\"formName\" size=\"32\" maxlength=\"{$data->_maxNameLen}\" value=\"",
@@ -357,7 +358,7 @@
 			'database' => array(
 				'title' => $lang['strdatabase'],
 				'field' => field('datname'),
-				'url'   => "redirect.php?subject=database&amp;{$misc->href}&amp;",
+				'url'   => "redirect.php?subject=database&{$misc->hrefRaw}&",
 				'vars'  => array('database' => 'datname'),
 			),
 			'owner' => array(
@@ -514,7 +515,7 @@
 			doCreate();
 			break;
 		case 'drop':
-			if (isset($_REQUEST['drop'])) doDrop(false);
+			if (Misc::isPost() && isset($_POST['drop'])) doDrop(false);
 			else doDefault();
 			break;
 		case 'confirm_drop':

@@ -59,6 +59,37 @@
 		document.dispatchEvent(ev);
 	}
 
+	/* ---------------------------------------------------------------- */
+	/* Token against cross-site requests (Misc::csrfToken)              */
+	/* ---------------------------------------------------------------- */
+
+	function csrfToken() {
+		var m = document.querySelector('meta[name="ppa-csrf"]');
+		return m ? m.getAttribute('content') : '';
+	}
+	ppa.csrfToken = csrfToken;
+
+	// Background requests made with jQuery carry it as a header.
+	if (window.jQuery) {
+		window.jQuery.ajaxSetup({
+			beforeSend: function (xhr, settings) {
+				if (!/^(GET|HEAD)$/i.test(settings.type || 'GET')) xhr.setRequestHeader('X-PPA-CSRF', csrfToken());
+			}
+		});
+	}
+
+	// A POST form without the field (one a page script built, say) gets it.
+	window.addEventListener('submit', function (e) {
+		var form = e.target;
+		if (!form || form.nodeName !== 'FORM' || (form.getAttribute('method') || '').toLowerCase() !== 'post') return;
+		if (form.querySelector('input[name="ppa_csrf"]')) return;
+		var input = document.createElement('input');
+		input.type = 'hidden';
+		input.name = 'ppa_csrf';
+		input.value = csrfToken();
+		form.appendChild(input);
+	}, true);
+
 	function storageGet(key) {
 		try { return window.localStorage.getItem(key); } catch (e) { return null; }
 	}
@@ -195,7 +226,7 @@
 			method: method,
 			body: opts.body,
 			credentials: 'same-origin',
-			headers: { 'X-PPA-Partial': '1' },
+			headers: method === 'GET' ? { 'X-PPA-Partial': '1' } : { 'X-PPA-Partial': '1', 'X-PPA-CSRF': csrfToken() },
 			signal: ctrl ? ctrl.signal : undefined
 		}).then(function (res) {
 			var type = res.headers.get('Content-Type') || '';
@@ -289,6 +320,10 @@
 
 	// Stylesheets and <style> blocks a page asks for in its <head>.
 	function syncHead(doc) {
+		var token = doc.querySelector('meta[name="ppa-csrf"]');
+		var mine = document.querySelector('meta[name="ppa-csrf"]');
+		if (token && mine) mine.setAttribute('content', token.getAttribute('content'));
+
 		var theme = document.getElementById('csstheme');
 		var newTheme = doc.getElementById('csstheme');
 		if (theme && newTheme && theme.getAttribute('href') !== newTheme.getAttribute('href')) {
@@ -388,7 +423,7 @@
 	/* ---------------------------------------------------------------- */
 
 	// Confirmation pages that open as a modal without being marked.
-	var DIALOG_ACTIONS = /^(confirm_drop|confirm_drop_[a-z]+|confirm_empty|confdelrow|confdelhistory|confclearhistory|confdelautovac)$/;
+	var DIALOG_ACTIONS = /^(confirm_drop|confirm_drop_[a-z]+|confirm_empty|confdelrow|confdelhistory|confclearhistory|confdelautovac|signal)$/;
 	// Buttons that only go back: in a dialog they just close it.
 	var CLOSE_BUTTONS = /^(cancel|no)$/;
 
@@ -535,7 +570,8 @@
 		buttons.forEach(function (b) { b.disabled = true; });
 		progress(true);
 
-		fetch(url, { method: method === 'get' ? 'GET' : 'POST', body: body, credentials: 'same-origin', headers: { 'X-PPA-Partial': '1' } })
+		fetch(url, { method: method === 'get' ? 'GET' : 'POST', body: body, credentials: 'same-origin',
+			headers: method === 'get' ? { 'X-PPA-Partial': '1' } : { 'X-PPA-Partial': '1', 'X-PPA-CSRF': csrfToken() } })
 			.then(function (res) { return res.text().then(function (html) { return { html: html, url: res.url || url }; }); })
 			.then(function (r) {
 				progress(false);

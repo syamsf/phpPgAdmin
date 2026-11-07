@@ -9,6 +9,8 @@ role that can only connect to ppa_other (see fixtures.sql).
 """
 
 import hashlib
+import html
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -25,13 +27,22 @@ def main(base, user, password):
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
     failures = []
 
+    token = {}
+
     def fetch(path, data=None):
+        # Like a browser: a POST carries the token of the last page seen.
+        if data is not None and token.get("v") and "ppa_csrf" not in data:
+            data = dict(data, ppa_csrf=token["v"])
         body = urllib.parse.urlencode(data).encode() if data is not None else None
         try:
             with opener.open(base + path, body, timeout=60) as resp:
-                return resp.geturl(), resp.read().decode("utf-8", "replace")
+                url, page = resp.geturl(), resp.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
-            return e.geturl(), e.read().decode("utf-8", "replace")
+            url, page = e.geturl(), e.read().decode("utf-8", "replace")
+        m = re.search(r'<meta name="ppa-csrf" content="([^"]+)"', page)
+        if m:
+            token["v"] = html.unescape(m.group(1))
+        return url, page
 
     def check(ok, what):
         print(("ok    " if ok else "FAIL  ") + what)

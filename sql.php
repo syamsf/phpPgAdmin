@@ -103,7 +103,7 @@
 					$names = $types = array();
 					for ($k = 0; $k < pg_num_fields($rs); $k++) {
 						$names[] = pg_field_name($rs, $k);
-						$types[] = pg_field_type($rs, $k);
+						$types[] = Misc::dataType(pg_field_type($rs, $k));
 					}
 					sqlPrintResults($names, $types, function () use ($rs) { return pg_fetch_row($rs); }, pg_num_rows($rs));
 					break;
@@ -131,6 +131,14 @@
 	// We need to store the query in a session for editing purposes
 	// We avoid GPC vars to avoid truncating long queries
 	$_sqlquery = null;
+	if (isset($_REQUEST['subject']) && $_REQUEST['subject'] == 'history' && !Misc::isPost()) {
+		// A link must not run anything: show the query in the editor instead.
+		$_params = array('subject' => 'database', 'action' => 'sql');
+		foreach (array('server', 'database', 'queryid') as $_k)
+			if (isset($_REQUEST[$_k]) && is_scalar($_REQUEST[$_k])) $_params[$_k] = (string) $_REQUEST[$_k];
+		header('Location: database.php?' . http_build_query($_params, '', '&'));
+		exit;
+	}
 	if (isset($_REQUEST['subject']) && $_REQUEST['subject'] == 'history') {
 		// Or maybe we came from the history popup
 		if (isset($_GET['queryid'], $_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']][$_GET['queryid']]['query']))
@@ -244,7 +252,7 @@
 				foreach ($rs->fields as $k => $v) {
 					$finfo = $rs->fetchField($k);
 					$names[] = $finfo->name;
-					$types[] = $finfo->type;
+					$types[] = Misc::dataType($finfo->type);
 				}
 				sqlPrintResults($names, $types, function () use ($rs) {
 					if ($rs->EOF) return false;

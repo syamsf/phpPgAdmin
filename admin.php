@@ -407,7 +407,7 @@
 				$_POST['autovacuum_vacuum_cost_delay'], $_POST['autovacuum_vacuum_cost_limit']);
 
 			if ($status == 0)
-				doAdmin($type, sprintf($lang['strsetvacuumtablesaved'], $_REQUEST['table']));
+				doAdmin($type, sprintf($lang['strsetvacuumtablesaved'], htmlspecialchars($_REQUEST['table'])));
 			else
 				doEditAutovacuum($type, true, $lang['strsetvacuumtablefail']);
 		}
@@ -581,13 +581,13 @@
 				'namespace' => array(
 					'title' => $lang['strschema'],
 					'field' => field('nspname'),
-					'url'   => "redirect.php?subject=schema&amp;{$misc->href}&amp;",
+					'url'   => "redirect.php?subject=schema&{$misc->hrefRaw}&",
 					'vars'  => array('schema' => 'nspname'),
 				),
 				'relname' => array(
 					'title' => $lang['strtable'],
 					'field' => field('relname'),
-					'url'	=> "redirect.php?subject=table&amp;{$misc->href}&amp;",
+					'url'	=> "redirect.php?subject=table&{$misc->hrefRaw}&",
 					'vars'  => array('table' => 'relname', 'schema' => 'nspname'),
 				),
 				'autovacuum_enabled' => array(
@@ -746,7 +746,8 @@
 				else doAdmin($type);
 				break;
 			case 'delautovac':
-				doDropAutovacuum($type, false);
+				if (Misc::isPost()) doDropAutovacuum($type, false);
+				else doAdmin($type);
 				break;
 			default:
 				return false;

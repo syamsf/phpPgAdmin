@@ -74,20 +74,6 @@
 						)
 					)
 				),
-				'run' => array(
-					'content' => $lang['strrunagain'],
-					'attr'=> array (
-						'href' => array (
-							'url' => 'sql.php',
-							'urlvars' => array (
-								'subject' => 'history',
-								'nohistory' => 't',
-								'queryid' => field('queryid'),
-								'paginate' => SqlEditor::paginateDefault() ? 'on' : 'f',
-							)
-						)
-					)
-				),
 				'remove' => array(
 					'content' => $lang['strdelete'],
 					'attr'=> array (
@@ -164,10 +150,10 @@
 			echo "<h3>{$lang['strdelhistory']}</h3>\n";
 			echo "<p>{$lang['strconfdelhistory']}</p>\n";
 
-			echo "<pre>", htmlentities($_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']][$qid]['query'], ENT_QUOTES, 'UTF-8'), "</pre>";
+			echo "<pre>", htmlentities($_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']][$qid]['query'] ?? '', ENT_QUOTES, 'UTF-8'), "</pre>";
 			echo "<form action=\"history.php\" method=\"post\">\n";
 			echo "<input type=\"hidden\" name=\"action\" value=\"delhistory\" />\n";
-			echo "<input type=\"hidden\" name=\"queryid\" value=\"$qid\" />\n";
+			echo "<input type=\"hidden\" name=\"queryid\" value=\"" . htmlspecialchars($qid) . "\" />\n";
 			echo $misc->form;
 			echo "<input type=\"submit\" name=\"yes\" value=\"{$lang['stryes']}\" />\n";
 			echo "<input type=\"submit\" name=\"no\" value=\"{$lang['strno']}\" />\n";

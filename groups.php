@@ -192,7 +192,7 @@
 			echo "\t\t\t<select name=\"members[]\" multiple=\"multiple\" size=\"", min(40, $users->recordCount()), "\">\n";
 			while (!$users->EOF) {
 				$username = $users->fields['usename'];
-				echo "\t\t\t\t<option value=\"{$username}\"",
+				echo "\t\t\t\t<option value=\"", htmlspecialchars($username), "\"",
 						(in_array($username, $_POST['members']) ? ' selected="selected"' : ''), ">", $misc->printVal($username), "</option>\n";
 				$users->moveNext();
 			}
@@ -244,7 +244,7 @@
 			'group' => array(
 				'title' => $lang['strgroup'],
 				'field' => field('groname'),
-				'url'   => "groups.php?action=properties&amp;{$misc->href}&amp;",
+				'url'   => "groups.php?action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('group' => 'groname'),
 			),
 			'actions' => array(
@@ -292,7 +292,7 @@
 			doAddMember();
 			break;
 		case 'drop_member':
-			if (isset($_REQUEST['drop'])) doDropMember(false);
+			if (Misc::isPost() && isset($_POST['drop'])) doDropMember(false);
 			else doProperties();
 			break;
 		case 'confirm_drop_member':
@@ -306,7 +306,7 @@
 			doCreate();
 			break;
 		case 'drop':
-			if (isset($_REQUEST['drop'])) doDrop(false);
+			if (Misc::isPost() && isset($_POST['drop'])) doDrop(false);
 			else doDefault();
 			break;
 		case 'confirm_drop':

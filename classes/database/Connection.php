@@ -19,27 +19,89 @@ class Connection {
 	 * Creates a new connection.  Will actually make a database connection.
 	 * @param $fetchMode Defaults to associative.  Override for different behaviour
 	 */
-	function __construct($host, $port, $sslmode, $user, $password, $database, $fetchMode = ADODB_FETCH_ASSOC) {
+	function __construct($host, $port, $sslmode, $user, $password, $database, $fetchMode = ADODB_FETCH_ASSOC, $sslrootcert = '') {
 		$this->conn = ADONewConnection('postgres');
 		$this->conn->setFetchMode($fetchMode);
 
-		// Ignore host if null
-		if ($host === null || $host == '')
-			if ($port !== null && $port != '')
-				$pghost = ':'.$port;
-			else
-				$pghost = '';
-		else
-			$pghost = "{$host}:{$port}";
+		// Hand the driver a complete pg_connect() connection string. This
+		// calls the driver's _connect() directly, not ADOdb's Connect(): that
+		// runs parse_url() over its first argument, which would let text in
+		// the password or database name replace the whole string. Going
+		// through its "host:port" form would also drop the sslmode and mangle
+		// IPv6 hosts.
+		$adodb = $this->conn;
+		$ok = false;
+		if (!self::validSslmode($sslmode)) {
+			$err = 'Invalid sslmode "' . $sslmode . '": use unspecified, disable, allow, prefer, require, verify-ca or verify-full';
+			$errno = 0;
+		} else {
+			// @: ADODB calls pg_connect() unsuppressed and a failed login would log a
+			// PHP Warning; error_get_last() still holds the message (see errorhandler).
+			$ok = @$adodb->_connect(self::conninfo($host, $port, $sslmode, $user, $password, $database, $sslrootcert));
+			if (isset($ok)) {
+				$err = $adodb->ErrorMsg();
+				$errno = $adodb->ErrorNo();
+				if (empty($err))
+					$err = 'Connection error to server';
+			} else {
+				$err = 'Missing extension for ' . $adodb->dataProvider;
+				$errno = 0;
+			}
+		}
+		if (!$ok) {
+			if ($fn = $adodb->raiseErrorFn)
+				$fn($adodb->databaseType, 'CONNECT', $errno, $err, '', '', $adodb);
+			$adodb->_connectionID = false;
+		}
+	}
 
-		// Add sslmode to $pghost as needed
-                if (($sslmode == 'disable') || ($sslmode == 'allow') || ($sslmode == 'prefer') || ($sslmode == 'require')) {
-                        $pghost .= ':'.$sslmode;
-                } elseif ($sslmode == 'legacy') {
-                        $pghost .= ' requiressl=1';
-                }
+	/**
+	 * sslmode values we pass on; '' and 'unspecified' mean "send none".
+	 */
+	static function validSslmode($sslmode) {
+		return $sslmode === null || in_array($sslmode, array('', 'unspecified', 'disable', 'allow', 'prefer',
+			'require', 'verify-ca', 'verify-full'), true);
+	}
 
-		$this->conn->connect($pghost, $user, $password, $database);
+	/**
+	 * The sslmode to give libpq or pg_dump: the mode itself, or null when
+	 * none is to be sent ('', 'unspecified') or it is not a real mode.
+	 */
+	static function sslmodeForLibpq($sslmode) {
+		if ($sslmode === null || in_array($sslmode, array('', 'unspecified'), true) || !self::validSslmode($sslmode))
+			return null;
+		return $sslmode;
+	}
+
+	/**
+	 * Quotes a value for a libpq connection string.
+	 */
+	static function conninfoValue($value) {
+		return "'" . addcslashes((string) $value, "'\\") . "'";
+	}
+
+	/**
+	 * Builds a libpq connection string. Check the sslmode with validSslmode() first.
+	 */
+	static function conninfo($host, $port, $sslmode, $user, $password, $database, $sslrootcert = '') {
+		$params = array();
+		if ($host !== null && $host !== '')
+			$params['host'] = $host;
+		if ($port !== null && $port !== '')
+			$params['port'] = $port;
+		if (self::sslmodeForLibpq($sslmode) !== null)
+			$params['sslmode'] = $sslmode;
+		if ($sslrootcert !== null && $sslrootcert !== '')
+			$params['sslrootcert'] = $sslrootcert;
+		$params['user'] = $user;
+		$params['password'] = $password;
+		// As ADOdb did: without a database name, libpq would use the user name.
+		$params['dbname'] = ($database !== null && $database !== '') ? $database : 'template1';
+
+		$str = '';
+		foreach ($params as $name => $value)
+			$str .= $name . '=' . self::conninfoValue($value) . ' ';
+		return rtrim($str);
 	}
 
 	/**

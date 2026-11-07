@@ -489,7 +489,7 @@
 			'column' => array(
 				'title' => $lang['strcolumn'],
 				'field' => field('attname'),
-				'url'   => "colproperties.php?subject=column&amp;{$misc->href}&amp;table=".urlencode($_REQUEST['table'])."&amp;",
+				'url'   => "colproperties.php?subject=column&{$misc->hrefRaw}&table=".urlencode($_REQUEST['table'])."&",
 				'vars'  => array('column' => 'attname'),
 			),
 			'type' => array(
@@ -567,17 +567,17 @@
 			),
 			'alter' => array(
 				'title' => $lang['stralter'],
-				'url'   => "colproperties.php?action=properties&amp;{$misc->href}&amp;table=".urlencode($_REQUEST['table'])."&amp;",
+				'url'   => "colproperties.php?action=properties&{$misc->hrefRaw}&table=".urlencode($_REQUEST['table'])."&",
 				'vars'  => array('column' => 'attname'),
 			),
 			'privileges' => array(
 				'title' => $lang['strprivileges'],
-				'url'   => "privileges.php?subject=column&amp;{$misc->href}&amp;table=".urlencode($_REQUEST['table'])."&amp;",
+				'url'   => "privileges.php?subject=column&{$misc->hrefRaw}&table=".urlencode($_REQUEST['table'])."&",
 				'vars'  => array('column' => 'attname'),
 			),
 			'drop' => array(
 				'title' => $lang['strdrop'],
-				'url'   => "tblproperties.php?action=confirm_drop&amp;{$misc->href}&amp;table=".urlencode($_REQUEST['table'])."&amp;",
+				'url'   => "tblproperties.php?action=confirm_drop&{$misc->hrefRaw}&table=".urlencode($_REQUEST['table'])."&",
 				'vars'  => array('column' => 'attname'),
 			),
 		);

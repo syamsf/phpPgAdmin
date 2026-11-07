@@ -118,7 +118,7 @@ class PluginManager {
 
 		if (!isset($this->plugins_list[$plugin_name])) {
 			// Show an error and stop the application
-			printf($lang['strpluginnotfound']."\t\n", $plugin_name);
+			printf($lang['strpluginnotfound']."\t\n", htmlspecialchars($plugin_name));
 			exit;
 		}
 		$plugin = $this->plugins_list[$plugin_name];
@@ -129,7 +129,7 @@ class PluginManager {
 		}
 		else {
 			// Show an error and stop the application
-			printf($lang['stractionnotfound']."\t\n", $action, $plugin_name);
+			printf($lang['stractionnotfound']."\t\n", htmlspecialchars($action), htmlspecialchars($plugin_name));
 			exit;
 		}
 	}

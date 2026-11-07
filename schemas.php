@@ -30,7 +30,7 @@
 			'schema' => array(
 				'title' => $lang['strschema'],
 				'field' => field('nspname'),
-				'url'   => "redirect.php?subject=schema&amp;{$misc->href}&amp;",
+				'url'   => "redirect.php?subject=schema&{$misc->hrefRaw}&",
 				'vars'  => array('schema' => 'nspname'),
 			),
 			'owner' => array(

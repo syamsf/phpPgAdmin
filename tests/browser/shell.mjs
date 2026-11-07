@@ -157,7 +157,7 @@ check((await mainText()).includes('ppa_formtest'), 'and its result is shown (sch
 
 // File upload through a form, in the page.
 await page.evaluate(async () => {
-	await fetch('sql.php', { method: 'POST', body: new URLSearchParams({ server: 'db:5432:allow', database: 'ppa_test', query: 'DROP TABLE IF EXISTS public.imp_test; CREATE TABLE public.imp_test (id int, name text)' }) });
+	await fetch('sql.php', { method: 'POST', body: new URLSearchParams({ ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content,  server: 'db:5432:allow', database: 'ppa_test', query: 'DROP TABLE IF EXISTS public.imp_test; CREATE TABLE public.imp_test (id int, name text)' }) });
 });
 const csvFile = path.join(os.tmpdir(), 'ppa-import-test.csv');
 fs.writeFileSync(csvFile, 'id,name\n1,one\n2,two\n');
@@ -171,7 +171,7 @@ check(await page.evaluate(() => window.__marker === 4), 'file upload form submit
 await page.goto(BASE + 'display.php?server=db%3A5432%3Aallow&database=ppa_test&schema=public&subject=table&table=imp_test', { waitUntil: 'networkidle0' });
 check(/two/.test(await mainText()), 'and the uploaded rows were imported');
 await page.evaluate(async () => {
-	await fetch('sql.php', { method: 'POST', body: new URLSearchParams({ server: 'db:5432:allow', database: 'ppa_test', query: 'DROP TABLE IF EXISTS public.imp_test; DROP SCHEMA IF EXISTS ppa_formtest' }) });
+	await fetch('sql.php', { method: 'POST', body: new URLSearchParams({ ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content,  server: 'db:5432:allow', database: 'ppa_test', query: 'DROP TABLE IF EXISTS public.imp_test; DROP SCHEMA IF EXISTS ppa_formtest' }) });
 });
 
 // Processes page polls; leaving it stops the polling.

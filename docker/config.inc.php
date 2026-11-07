@@ -27,6 +27,8 @@ if (!function_exists('ppa_env')) {
 	}
 
 	// "Production=db1.internal:5432, Staging=db2.internal, [::1]:5433"
+	// A "?sslmode=require" suffix sets the sslmode of that one server (it
+	// otherwise follows PPA_SSLMODE).
 	// A "/db1+db2" suffix gives each of those databases its own login:
 	// "Shop=db3.internal:5432/orders+billing"
 	function ppa_parse_servers($list)
@@ -37,6 +39,12 @@ if (!function_exists('ppa_env')) {
 			$desc = null;
 			if (strpos($entry, '=') !== false) {
 				list($desc, $entry) = explode('=', $entry, 2);
+			}
+
+			$sslmode = null;
+			if (preg_match('/\?sslmode=([a-z-]+)$/', $entry, $m)) {
+				$sslmode = $m[1];
+				$entry = substr($entry, 0, -strlen($m[0]));
 			}
 
 			$databases = array();
@@ -61,6 +69,9 @@ if (!function_exists('ppa_env')) {
 				'host' => $host,
 				'port' => $port,
 			);
+			if ($sslmode !== null) {
+				$server['sslmode'] = $sslmode;
+			}
 			if ($databases) {
 				$server['databases'] = $databases;
 			}
@@ -73,7 +84,8 @@ if (!function_exists('ppa_env')) {
 
 foreach (ppa_parse_servers(ppa_env('PPA_SERVERS', 'localhost')) as $i => $server) {
 	$conf['servers'][$i] = $server + array(
-		'sslmode' => ppa_env('PPA_SSLMODE', 'allow'),
+		'sslmode' => ppa_env('PPA_SSLMODE', 'prefer'),
+		'sslrootcert' => ppa_env('PPA_SSLROOTCERT', ''),
 		'defaultdb' => ppa_env('PPA_DEFAULTDB', 'postgres'),
 		'pg_dump_path' => '/usr/bin/pg_dump',
 		'pg_dumpall_path' => '/usr/bin/pg_dumpall',

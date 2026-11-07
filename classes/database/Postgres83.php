@@ -285,6 +285,10 @@ class Postgres83 extends Postgres84 {
 	 */
 	function alterSequenceProps($seqrs, $increment,	$minvalue, $maxvalue,
 								$restartvalue, $cachevalue, $cycledvalue, $startvalue) {
+		if (!$this->isValidSeqNumber($increment) || !$this->isValidSeqNumber($minvalue)
+			|| !$this->isValidSeqNumber($maxvalue) || !$this->isValidSeqNumber($restartvalue)
+			|| !$this->isValidSeqNumber($cachevalue))
+			return -1;
 
 		$sql = '';
 		/* vars are cleaned in _alterSequence */

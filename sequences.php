@@ -30,7 +30,7 @@
 			'sequence' => array(
 				'title' => $lang['strsequence'],
 				'field' => field('seqname'),
-				'url'   => "sequences.php?action=properties&amp;{$misc->href}&amp;",
+				'url'   => "sequences.php?action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('sequence' => 'seqname'),
 			),
 			'owner' => array(

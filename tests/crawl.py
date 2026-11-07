@@ -45,13 +45,24 @@ def main(base, server, user, password):
     base = base.rstrip("/") + "/"
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
 
+    token = {}
+
     def fetch(url, data=None):
+        # Like a browser: a POST carries the token of the last page seen.
+        if data is not None and token.get("v") and "ppa_csrf" not in data:
+            data = dict(data, ppa_csrf=token["v"])
         body = urllib.parse.urlencode(data).encode() if data is not None else None
         try:
             with opener.open(url, body, timeout=60) as resp:
-                return resp.status, resp.read().decode("utf-8", "replace")
+                status, page = resp.status, resp.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
-            return e.code, e.read().decode("utf-8", "replace")
+            status, page = e.code, e.read().decode("utf-8", "replace")
+        m = re.search(r'<meta name="ppa-csrf" content="([^"]+)"', page)
+        if m:
+            token["v"] = html.unescape(m.group(1))
+        return status, page
+
+    fetch(base + "intro.php")
 
     status, page = fetch(base + "redirect.php", {
         "subject": "server",

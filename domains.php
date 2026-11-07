@@ -426,7 +426,7 @@
 			'domain' => array(
 				'title' => $lang['strdomain'],
 				'field' => field('domname'),
-				'url' => "domains.php?action=properties&amp;{$misc->href}&amp;",
+				'url' => "domains.php?action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('domain' => 'domname'),
 			),
 			'type' => array(

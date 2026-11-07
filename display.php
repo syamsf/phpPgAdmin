@@ -135,6 +135,7 @@
 			else $fksprops = false;
 
 			echo "<form action=\"display.php\" method=\"post\" id=\"ac_form\">\n";
+			echo $misc->csrfField();
 			$elements = 0;
 			$error = true;
 			if ($rs->recordCount() == 1 && $attrs->recordCount() > 0) {
@@ -175,7 +176,7 @@
 						if (($_REQUEST['action'] ?? '') == 'confeditrow' && $rs->fields[$attrs->fields['attname']] === null) {
 							$_REQUEST['nulls'][$attrs->fields['attname']] = 'on';
 						}
-						echo "<label><span><input type=\"checkbox\" title=\"{$lang['strnull']}\" aria-label=\"{$lang['strnull']}\" name=\"nulls[{$attrs->fields['attname']}]\"",
+						echo "<label><span><input type=\"checkbox\" title=\"{$lang['strnull']}\" aria-label=\"{$lang['strnull']}\" name=\"nulls[", htmlspecialchars($attrs->fields['attname']), "]\"",
 							isset($_REQUEST['nulls'][$attrs->fields['attname']]) ? ' checked="checked"' : '', " /></span></label></td>\n";
 						$elements++;
 					}
@@ -525,9 +526,9 @@
 						echo "</a>";
 						echo "</div>";
 					}
-					echo $misc->printVal($v, $finfo->type, array('null' => true, 'clip' => $clip, 'class' => 'fk_value'));
+					echo $misc->printVal($v, Misc::dataType($finfo->type), array('null' => true, 'clip' => $clip, 'class' => 'fk_value'));
 				} else {
-					echo $misc->printVal($v, $finfo->type, array('null' => true, 'clip' => $clip));
+					echo $misc->printVal($v, Misc::dataType($finfo->type), array('null' => true, 'clip' => $clip));
 				}
 				echo "</td>";
 			}
@@ -752,6 +753,7 @@
 			));
 		} else {
 			echo "<form method=\"post\" action=\"display.php\" class=\"sql-query-form\">\n";
+			echo $misc->csrfField();
 			printHiddenFields($_gets, array('query', 'qt'));
 			echo "<input type=\"hidden\" name=\"page\" value=\"", htmlspecialchars($_REQUEST['page']), "\" />\n";
 			/* Show the query that was actually executed. */

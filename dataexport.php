@@ -102,6 +102,10 @@
 		// Set up the dump transaction
 		$status = $data->beginDump();
 
+		// The INSERT statements below rely on this for their string literals.
+		if ($format == 'sql')
+			echo "SET standard_conforming_strings = on;\n";
+
 		// If the dump is not dataonly then dump the structure prefix
 		if ($_REQUEST['what'] != 'dataonly')
 			echo $data->getTableDefPrefix($_REQUEST['table'] ?? null, $clean);
@@ -226,16 +230,9 @@
 						if ($first) echo "\"{$k}\"";
 						else echo ", \"{$k}\"";
 
-						if (!is_null($v)) {
-							// Output value
-							// addCSlashes converts all weird ASCII characters to octal representation,
-							// EXCEPT the 'special' ones like \r \n \t, etc.
-							$v = addCSlashes($v, "\0..\37\177..\377");
-							// We add an extra escaping slash onto octal encoded characters
-							$v = preg_replace('/\\\\([0-7]{3})/', '\\\1', $v);
-							// Finally, escape all apostrophes
-							$v = str_replace("'", "''", $v);
-						}
+						// With standard_conforming_strings on, doubling the
+						// apostrophes is all a string literal needs.
+						if (!is_null($v)) $v = str_replace("'", "''", $v);
 						if ($first) {
 							$values = (is_null($v) ? 'NULL' : "'{$v}'");
 							$first = false;

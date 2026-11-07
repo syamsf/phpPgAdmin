@@ -401,7 +401,7 @@
 					echo "<td style=\"white-space:nowrap;\">", $misc->printVal($attrs->fields['attname']), "</td>";
 					echo "<td style=\"white-space:nowrap;\">", $misc->printVal($data->formatType($attrs->fields['type'], $attrs->fields['atttypmod'])), "</td>";
 					echo "<td style=\"white-space:nowrap;\">";
-					echo "<select name=\"ops[{$attrs->fields['attname']}]\">\n";
+					echo "<select name=\"ops[", htmlspecialchars($attrs->fields['attname']), "]\">\n";
 					foreach (array_keys($data->selectOps) as $v) {
 						echo "<option value=\"", htmlspecialchars($v), "\"", ($v == $_REQUEST['ops'][$attrs->fields['attname']]) ? ' selected="selected"' : '',
 						">", htmlspecialchars($v), "</option>\n";
@@ -479,6 +479,7 @@
 			else $fksprops = false;
 
 			echo "<form action=\"tables.php\" method=\"post\" id=\"ac_form\">\n";
+			echo $misc->csrfField();
 			if ($attrs->recordCount() > 0) {
 				echo "<table>\n";
 
@@ -759,7 +760,7 @@
 			'table' => array(
 				'title' => $lang['strtable'],
 				'field' => field('relname'),
-				'url'	=> "redirect.php?subject=table&amp;{$misc->href}&amp;",
+				'url'	=> "redirect.php?subject=table&{$misc->hrefRaw}&",
 				'vars'  => array('table' => 'relname'),
 			),
 			'owner' => array(

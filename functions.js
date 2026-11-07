@@ -172,7 +172,9 @@ function baseArgTR() {
 		var txt = document.createElement("input");
 		tr.className='arg_tr_pc';
 		td.className='data3';
-		td.innerHTML = g_modes_select;
+		var modes_select = buildSelect('formArgModes[]', g_modes, '');
+		modes_select.style.width = '100%';
+		td.appendChild(modes_select);
 		tr.appendChild(td);
 		txt.type='text';
 		txt.name='formArgName[]';
@@ -184,7 +186,8 @@ function baseArgTR() {
 		tr.appendChild(td);
 		var td = document.createElement("td");
 		td.className='data3';
-		td.innerHTML = g_types_select;
+		td.appendChild(buildSelect('formArgType[]', g_types, ''));
+		td.appendChild(buildSelect('formArgArray[]', ['', '[]'], ''));
 		tr.appendChild(td);
 		var td = document.createElement("td");
 		td = buildArgImages(td);

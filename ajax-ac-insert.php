@@ -1,30 +1,33 @@
 <?php
 	include_once('./libraries/lib.inc.php');
 
-	if(isset($_POST['offset']))
-		$offset = " OFFSET {$_POST['offset']}";
-	else {
-		$_POST['offset'] = 0;
-		$offset = " OFFSET 0";
-	}
+	$_POST['offset'] = isset($_POST['offset']) ? (int)$_POST['offset'] : 0;
+	$offset = " OFFSET {$_POST['offset']}";
 
 	$keynames = array();
 	foreach ($_POST['fkeynames'] as $k => $v) {
-		$fkeynames[$k] = html_entity_decode($v, ENT_QUOTES);
+		$fkeynames[$k] = $v;
 	}
 
 	$keyspos = array_combine($fkeynames, $_POST['keys']);
 
-	$f_schema = html_entity_decode($_POST['f_schema'], ENT_QUOTES);
+	$f_schema = $_POST['f_schema'];
 	$data->fieldClean($f_schema);
-	$f_table = html_entity_decode($_POST['f_table'], ENT_QUOTES);
+	$f_table = $_POST['f_table'];
 	$data->fieldClean($f_table);
 	$f_attname = $fkeynames[$_POST['fattpos'][0]];
 	$data->fieldClean($f_attname);
 
+	// Escape LIKE metacharacters in the user-supplied value so '%' and '_'
+	// are matched literally ('@' is the escape character, not a backslash,
+	// so this works whatever standard_conforming_strings is), then clean()
+	// the result for the string literal.
+	$fvalue = str_replace(array('@', '%', '_'), array('@@', '@%', '@_'), (string)$_POST['fvalue']);
+	$data->clean($fvalue);
+
 	$q = "SELECT *
 		FROM \"{$f_schema}\".\"{$f_table}\"
-		WHERE \"{$f_attname}\"::text LIKE '{$_POST['fvalue']}%'
+		WHERE \"{$f_attname}\"::text LIKE '{$fvalue}%' ESCAPE '@'
 		ORDER BY \"{$f_attname}\" LIMIT 12 {$offset};";
 
 	$res = $data->selectSet($q);
@@ -49,12 +52,12 @@
 			foreach ($res->fields as $n => $v) {
 				$finfo = $res->fetchField($j++);
 				if (in_array($n, $fkeynames))
-					echo "<td><a href=\"javascript:void(0)\" class=\"fkval\" name=\"{$keyspos[$n]}\">",
-						$misc->printVal($v, $finfo->type, array('clip' => 'collapsed')),
+					echo "<td><a href=\"javascript:void(0)\" class=\"fkval\" name=\"", htmlspecialchars($keyspos[$n]), "\">",
+						$misc->printVal($v, Misc::dataType($finfo->type), array('clip' => 'collapsed')),
 						"</a></td>";
 				else
 					echo "<td><a href=\"javascript:void(0)\">",
-						$misc->printVal($v, $finfo->type, array('clip' => 'collapsed')),
+						$misc->printVal($v, Misc::dataType($finfo->type), array('clip' => 'collapsed')),
 						"</a></td>";
 			}
 			echo "</tr>\n";
@@ -84,7 +87,7 @@
 		echo $js ."</script>";
 	}
 	else {
-		printf("<p>{$lang['strnofkref']}</p>", "\"{$_POST['f_schema']}\".\"{$_POST['f_table']}\".\"{$fkeynames[$_POST['fattpos']]}\"");
+		printf("<p>{$lang['strnofkref']}</p>", htmlspecialchars("\"{$_POST['f_schema']}\".\"{$_POST['f_table']}\".\"{$fkeynames[$_POST['fattpos'][0]]}\""));
 
 		if ($_POST['offset'])
 			echo "<a href=\"javascript:void(0)\" class=\"fkprev\">Prev &lt;&lt;</a>";

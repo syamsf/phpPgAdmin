@@ -42,9 +42,9 @@ function ok(cond, msg) {
 	}
 
 	const page = await newPage();
-	await page.goto(base + 'robots.txt');
+	await page.goto(base + 'intro.php');
 	const loginStatus = await page.evaluate(async (server, pw) => {
-		const body = new URLSearchParams({
+		const body = new URLSearchParams({ ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content, 
 			subject: 'server', server, loginServer: server, loginUsername: 'ppa',
 			loginSubmit: 'Login',
 		});
@@ -188,12 +188,12 @@ function ok(cond, msg) {
 
 	// --- Two tabs, two queries, paging independently
 	async function runQuery(p, sql) {
-		await p.goto(base + 'robots.txt');
+		await p.goto(base + 'intro.php');
 		await nav(p, () => p.evaluate((db, sql) => {
 			const f = document.createElement('form');
 			f.method = 'post';
 			f.action = 'sql.php';
-			for (const [k, v] of Object.entries({ ...db, query: sql, paginate: 'on', page_size: '25' })) {
+			for (const [k, v] of Object.entries({ ...db, ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content, query: sql, paginate: 'on', page_size: '25' })) {
 				const i = document.createElement('input');
 				i.type = 'hidden'; i.name = k; i.value = v;
 				f.appendChild(i);
