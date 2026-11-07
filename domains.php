@@ -485,7 +485,6 @@
 
 		if (!$data->hasAlterDomains()) unset($actions['alter']);
 		
-		$misc->printTable($domains, $columns, $actions, 'domains-domains', $lang['strnodomains']);
 
 		$navlinks = array (
 			'create' => array (
@@ -504,6 +503,7 @@
 			)
 		);
 		$misc->printNavLinks($navlinks, 'domains-domains', get_defined_vars());
+		$misc->printTable($domains, $columns, $actions, 'domains-domains', $lang['strnodomains']);
 	}
 	
 	/**

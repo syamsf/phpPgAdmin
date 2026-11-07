@@ -659,7 +659,6 @@
 			),
 		);
 
-		$misc->printTable($views, $columns, $actions, 'views-views',  $lang['strnoviews']);
 
 		$navlinks = array (
 			'create' => array (
@@ -692,6 +691,7 @@
 			)
 		);
 		$misc->printNavLinks($navlinks, 'views-views', get_defined_vars());
+		$misc->printTable($views, $columns, $actions, 'views-views',  $lang['strnoviews']);
 
 	}
 

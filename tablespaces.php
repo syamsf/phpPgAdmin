@@ -275,7 +275,6 @@
 			)
 		);
 				
-		$misc->printTable($tablespaces, $columns, $actions, 'tablespaces-tablespaces', $lang['strnotablespaces']);
 		
 		$misc->printNavLinks(array ('create' => array (
 				'attr'=> array (
@@ -289,6 +288,7 @@
 				),
 				'content' => $lang['strcreatetablespace']
 			)), 'tablespaces-tablespaces', get_defined_vars());
+		$misc->printTable($tablespaces, $columns, $actions, 'tablespaces-tablespaces', $lang['strnotablespaces']);
 	}
 
 	$misc->printHeader($lang['strtablespaces']);

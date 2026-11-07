@@ -19,6 +19,13 @@ class Postgres93 extends Postgres94 {
 		parent::__construct($conn);
 	}
 
+	/**
+	 * No to_regtype() before 9.4: no list of values for enum columns.
+	 */
+	function getEnumLabels($type) {
+		return null;
+	}
+
 	// Help functions
 
 	function getHelpPages() {

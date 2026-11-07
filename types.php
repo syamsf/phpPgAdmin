@@ -592,7 +592,6 @@
 			),
 		);
 		
-		$misc->printTable($types, $columns, $actions, 'types-types', $lang['strnotypes']);
 
 		$navlinks = array (
 			'create' => array (
@@ -644,6 +643,7 @@
 		}
 
 		$misc->printNavLinks($navlinks, 'types-types', get_defined_vars());
+		$misc->printTable($types, $columns, $actions, 'types-types', $lang['strnotypes']);
 	}
 	
 	/**

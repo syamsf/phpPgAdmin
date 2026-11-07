@@ -353,7 +353,6 @@
 			),
 		);
 		
-		$misc->printTable($users, $columns, $actions, 'users-users', $lang['strnousers']);
 
 		$misc->printNavLinks(array ('create' => array (
 				'attr'=> array (
@@ -367,6 +366,7 @@
 				),
 				'content' => $lang['strcreateuser']
 			)), 'users-users', get_defined_vars());
+		$misc->printTable($users, $columns, $actions, 'users-users', $lang['strnousers']);
 
 	}
 

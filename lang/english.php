@@ -35,6 +35,18 @@
 	$lang['strasvalue'] = 'Plain value';
 	$lang['strasexpression'] = 'SQL expression';
 	$lang['strfksuggest'] = 'Suggest values for foreign key columns';
+	$lang['strmoretabs'] = 'More';
+	$lang['strdeleterowbutton'] = 'Delete row';
+	$lang['strkind'] = 'Kind';
+	$lang['strmaterializedview'] = 'Materialized view';
+	$lang['strpartitionedtable'] = 'Partitioned table';
+	$lang['strforeigntable'] = 'Foreign table';
+	$lang['strbulkactions'] = 'Actions for the selected rows';
+	$lang['strrowselected'] = '1 row selected';
+	$lang['strrowsselected'] = '%d rows selected';
+	$lang['strselectallrows'] = 'Select all rows';
+	$lang['strclearselection'] = 'Clear selection';
+	$lang['strinsertblankhelp'] = 'Fields left empty get the column\'s default, or NULL if it has none.';
 	$lang['strachelp'] = 'While typing in a column that refers to another table, list matching rows of that table.';
 	$lang['strautorefreshstart'] = 'Refresh automatically';
 	$lang['strautorefreshstop'] = 'Stop refreshing automatically';
@@ -238,7 +250,7 @@
 	$lang['strfilter'] = 'Filter';
 	$lang['strfiltercolumn'] = 'Filter %s';
 	$lang['strfilterhelp'] = 'Shows rows whose value contains the text (case insensitive). Start with = for an exact match.';
-	$lang['strapplyfilters'] = 'Apply';
+	$lang['strapplyfilters'] = 'Apply filters';
 	$lang['strclearfilters'] = 'Clear filters';
 	$lang['strsqlquery'] = 'SQL query';
 	$lang['strgridempty'] = 'empty';

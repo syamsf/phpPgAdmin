@@ -68,9 +68,24 @@ kept it alive with PHP 8 fixes, and this repo builds on that. What's added here:
   Ctrl/Cmd+click opens the full page instead.
 - In lists, rows with many actions show the first two and a "⋯" menu with the
   rest; actions that destroy something (Drop, Empty, Delete) come last, in
-  red.
+  red. The page's own actions (Create table, Add column...) are buttons above
+  the list. Ticking rows brings up a bar with what can be done to all of them.
+  Rarely used tabs (Rules, Operators, Op Classes, Conversions, Aggregates,
+  Languages, Casts) are under "More".
+- The tables list shows each table's size, and counts the rows of small
+  tables that were never analyzed instead of showing "—". A column's
+  constraints read "PK", "FK → customer.id", "Unique" or "Check: ...".
+- When inserting a row, fields left empty get the column's default (or NULL)
+  instead of an empty string that numbers, dates and JSON reject; a text
+  column that can't be NULL gets the empty string. When editing, an empty
+  number, date or JSON field is saved as NULL, an empty text field as an
+  empty string. Enum columns offer their values in a list, dates and times
+  get the browser's date and time inputs.
+- A query that fails in the data grid reports the error against the query as
+  typed, and marks the spot in the editor.
 - A failed login says why (wrong password, server unreachable, pg_hba.conf,
-  SSL) and shows the server's own message.
+  SSL) and shows the server's own message, and keeps the username. Logging
+  in from a link opens the page the link was for.
 
 ## Running it
 

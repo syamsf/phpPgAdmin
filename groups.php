@@ -267,7 +267,6 @@
 			),
 		);
 		
-		$misc->printTable($groups, $columns, $actions, 'groups-properties', $lang['strnogroups']);
 		
 		$misc->printNavLinks(array ('create' => array (
 				'attr'=> array (
@@ -281,6 +280,7 @@
 				),
 				'content' => $lang['strcreategroup']
 			)), 'groups-groups', get_defined_vars());
+		$misc->printTable($groups, $columns, $actions, 'groups-properties', $lang['strnogroups']);
 
 	}
 

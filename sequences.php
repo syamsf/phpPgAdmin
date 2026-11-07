@@ -91,7 +91,6 @@
 			),
 		);
 
-		$misc->printTable($sequences, $columns, $actions, 'sequences-sequences', $lang['strnosequences']);
 
 		$misc->printNavLinks(array ('create' => array (
 				'attr'=> array (
@@ -107,6 +106,7 @@
 				),
 				'content' => $lang['strcreatesequence']
 			)), 'sequences-sequences', get_defined_vars());
+		$misc->printTable($sequences, $columns, $actions, 'sequences-sequences', $lang['strnosequences']);
 	}
 
 	/**

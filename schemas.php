@@ -92,7 +92,6 @@
 
 		if (!$data->hasAlterSchema()) unset($actions['alter']);
 
-		$misc->printTable($schemas, $columns, $actions, 'schemas-schemas', $lang['strnoschemas']);
 
 		$misc->printNavLinks(array ('create' => array (
 				'attr'=> array (
@@ -107,6 +106,7 @@
 				),
 				'content' => $lang['strcreateschema']
 			)), 'schemas-schemas', get_defined_vars());
+		$misc->printTable($schemas, $columns, $actions, 'schemas-schemas', $lang['strnoschemas']);
 	}
 
 	/**

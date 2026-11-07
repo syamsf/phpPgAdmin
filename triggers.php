@@ -361,7 +361,6 @@
 			);
 		}
 
-		$misc->printTable($triggers, $columns, $actions, 'triggers-triggers', $lang['strnotriggers'], 'tgPre');
 		
 		$misc->printNavLinks(array ('create' => array (
 				'attr'=> array (
@@ -378,6 +377,7 @@
 				),
 				'content' => $lang['strcreatetrigger']
 			)), 'triggers-triggers', get_defined_vars());
+		$misc->printTable($triggers, $columns, $actions, 'triggers-triggers', $lang['strnotriggers'], 'tgPre');
 	}
 
 	function doTree() {

@@ -486,7 +486,6 @@
 			)
 		);
 
-		$misc->printTable($constraints, $columns, $actions, 'constraints-constraints', $lang['strnoconstraints'], 'cnPre');
 
 		$navlinks = array (
 			'addcheck' => array (
@@ -551,6 +550,7 @@
 			)
 		);
 		$misc->printNavLinks($navlinks, 'constraints-constraints', get_defined_vars());
+		$misc->printTable($constraints, $columns, $actions, 'constraints-constraints', $lang['strnoconstraints'], 'cnPre');
 	}
 
 	function doTree() {

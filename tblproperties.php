@@ -525,35 +525,55 @@
 			),
 		);
 
+		/* The constraints of a column as short labels ("PK", "FK -> customer.id",
+		 * "Unique", "Check: total >= 0"), each with its full definition as a
+		 * tooltip and a link to where it is defined. */
 		function cstrRender($s, $p) {
-			global $misc, $data;
+			global $misc, $data, $lang;
 
-			$str ='';
+			$str = '';
 			foreach ($p['keys'] as $k => $c) {
+				if ($c['p_field'] != $s) continue;
 
-				if (is_null($p['keys'][$k]['consrc'])) {
-					$atts = $data->getAttributeNames($_REQUEST['table'], explode(' ', $p['keys'][$k]['indkey']));
+				if (is_null($c['consrc'])) {
+					$atts = $data->getAttributeNames($_REQUEST['table'], explode(' ', $c['indkey']));
 					$c['consrc'] = ($c['contype'] == 'u' ? "UNIQUE (" : "PRIMARY KEY (") . join(',', $atts) . ')';
 				}
+				$here = 'constraints.php?' . $misc->hrefRaw . '&table=' . urlencode($c['p_table']) . '&schema=' . urlencode($c['p_schema']);
 
-				if ($c['p_field'] == $s)
-					switch ($c['contype']) {
-						case 'p':
-							$str .= '<a href="constraints.php?'. $misc->href ."&amp;table=". urlencode($c['p_table']) ."&amp;schema=". urlencode($c['p_schema']) ."\"><img src=\"".
-								$misc->icon('PrimaryKey') .'" alt="[pk]" title="'. htmlentities($c['consrc'], ENT_QUOTES, 'UTF-8') .'" /></a>';
+				switch ($c['contype']) {
+					case 'p':
+						$label = 'PK';
+						$class = 'pk';
+						$url = $here;
 						break;
-						case 'f':
-							$str .= '<a href="tblproperties.php?'. $misc->href ."&amp;table=". urlencode($c['f_table']) ."&amp;schema=". urlencode($c['f_schema']) ."\"><img src=\"".
-								$misc->icon('ForeignKey') .'" alt="[fk]" title="'. htmlentities($c['consrc'], ENT_QUOTES, 'UTF-8') .'" /></a>';
+					case 'f':
+						// The column it refers to; the schema only when it's another one
+						$target = ($c['f_schema'] !== $c['p_schema'] ? $c['f_schema'] . '.' : '') . $c['f_table'];
+						if ($c['f_field'] !== null) $target .= '.' . $c['f_field'];
+						$label = "FK \u{2192} {$target}";
+						$class = 'fk';
+						$url = 'tblproperties.php?' . $misc->hrefRaw . '&table=' . urlencode($c['f_table']) . '&schema=' . urlencode($c['f_schema']);
 						break;
-						case 'u':
-							$str .= '<a href="constraints.php?'. $misc->href ."&amp;table=". urlencode($c['p_table']) ."&amp;schema=". urlencode($c['p_schema']) ."\"><img src=\"".
-								$misc->icon('UniqueConstraint') .'" alt="[uniq]" title="'. htmlentities($c['consrc'], ENT_QUOTES, 'UTF-8') .'" /></a>';
+					case 'u':
+						$label = $lang['strunique'];
+						$class = 'uniq';
+						$url = $here;
 						break;
-						case 'c':
-							$str .= '<a href="constraints.php?'. $misc->href ."&amp;table=". urlencode($c['p_table']) ."&amp;schema=". urlencode($c['p_schema']) ."\"><img src=\"".
-								$misc->icon('CheckConstraint') .'" alt="[check]" title="'. htmlentities($c['consrc'], ENT_QUOTES, 'UTF-8') .'" /></a>';
-					}
+					case 'c':
+						// "CHECK ((total >= (0)::numeric))" -> "Check: total >= (0)::numeric"
+						$expr = preg_replace('/^CHECK\s*\((.*)\)(\s+NOT VALID)?$/s', '$1', $c['consrc']);
+						if (preg_match('/^\((.*)\)$/s', $expr, $m)) $expr = $m[1];
+						if (mb_strlen($expr) > 40) $expr = mb_substr($expr, 0, 38) . "\u{2026}";
+						$label = "Check: {$expr}";
+						$class = 'check';
+						$url = $here;
+						break;
+					default:
+						continue 2;
+				}
+				$str .= '<a class="ppa-badge ppa-badge-' . $class . '" href="' . htmlspecialchars($url) . '" title="'
+					. htmlspecialchars($c['consrc']) . '">' . htmlspecialchars($label) . '</a>';
 			}
 
 			return $str;
@@ -640,7 +660,6 @@
 			),
 		);
 
-		$misc->printTable($attrs, $columns, $actions, 'tblproperties-tblproperties', null, 'attPre');
 
 		$navlinks = array (
 			'browse' => array (
@@ -754,6 +773,7 @@
 			'tblproperties-tblproperties'
 			, get_defined_vars()
 		);
+		$misc->printTable($attrs, $columns, $actions, 'tblproperties-tblproperties', null, 'attPre');
 
 	}
 

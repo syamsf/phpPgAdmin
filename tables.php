@@ -31,6 +31,13 @@
 
 		switch ($_REQUEST['stage']) {
 			case 1:
+			case 2:
+				/* One page: the table's name and options, then its columns
+				 * (more can be added with "+ Add column"). */
+				$fields = trim((string) $_REQUEST['fields']);
+				if ($fields == '' || !is_numeric($fields) || $fields != (int)$fields || $fields < 1)
+					$_REQUEST['fields'] = '3';
+
 				// Fetch all tablespaces from the database
 				$tablespaces = $data->hasTablespaces() ? $data->getTablespaces() : null;
 
@@ -38,19 +45,17 @@
 				$misc->printTitle($lang['strcreatetable'], 'pg.table.create');
 				$misc->printMsg($msg);
 
+				echo "<script src=\"tables.js\" type=\"text/javascript\"></script>";
 				echo "<form action=\"tables.php\" method=\"post\">\n";
 				echo "<table>\n";
 				echo "\t<tr>\n\t\t<th class=\"data left required\">{$lang['strname']}</th>\n";
 				echo "\t\t<td class=\"data\"><input name=\"name\" size=\"32\" maxlength=\"{$data->_maxNameLen}\" value=\"",
 					htmlspecialchars($_REQUEST['name']), "\" /></td>\n\t</tr>\n";
-				echo "\t<tr>\n\t\t<th class=\"data left required\">{$lang['strnumcols']}</th>\n";
-				echo "\t\t<td class=\"data\"><input name=\"fields\" size=\"5\" maxlength=\"{$data->_maxNameLen}\" value=\"",
-					htmlspecialchars($_REQUEST['fields']), "\" /></td>\n\t</tr>\n";
 				if ($data->hasServerOids()) {
 					echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['stroptions']}</th>\n";
 					echo "\t\t<td class=\"data\"><label for=\"withoutoids\"><input type=\"checkbox\" id=\"withoutoids\" name=\"withoutoids\"", isset($_REQUEST['withoutoids']) ? ' checked="checked"' : '', " />WITHOUT OIDS</label></td>\n\t</tr>\n";
 				} else {
-					echo "\t\t<input type=\"hidden\" id=\"withoutoids\" name=\"withoutoids\" value=\"checked\"\n";
+					echo "\t\t<input type=\"hidden\" id=\"withoutoids\" name=\"withoutoids\" value=\"checked\" />\n";
 				}
 
 				// Tablespace (if there are any)
@@ -75,38 +80,11 @@
 					htmlspecialchars($_REQUEST['tblcomment']), "</textarea></td>\n\t</tr>\n";
 
 				echo "</table>\n";
-				echo "<p><input type=\"hidden\" name=\"action\" value=\"create\" />\n";
-				echo "<input type=\"hidden\" name=\"stage\" value=\"2\" />\n";
-				echo $misc->form;
-				echo "<input type=\"submit\" value=\"{$lang['strnext']}\" />\n";
-				echo "<input type=\"submit\" name=\"cancel\" value=\"{$lang['strcancel']}\" /></p>\n";
-				echo "</form>\n";
-				break;
-			case 2:
-				global $lang;
 
-				// Check inputs
-				$fields = trim($_REQUEST['fields']);
-				if (trim($_REQUEST['name']) == '') {
-					$_REQUEST['stage'] = 1;
-					doCreate($lang['strtableneedsname']);
-					return;
-				}
-				elseif ($fields == '' || !is_numeric($fields) || $fields != (int)$fields || $fields < 1)  {
-					$_REQUEST['stage'] = 1;
-					doCreate($lang['strtableneedscols']);
-					return;
-				}
-
+				echo "<h3>{$lang['strcolumns']}</h3>\n";
 				$types = $data->getTypes(true, false, true);
 				$types_for_js = array();
 
-				$misc->printTrail('schema');
-				$misc->printTitle($lang['strcreatetable'], 'pg.table.create');
-				$misc->printMsg($msg);
-
-				echo "<script src=\"tables.js\" type=\"text/javascript\"></script>";
-				echo "<form action=\"tables.php\" method=\"post\">\n";
 
 				// Output table header
 				echo "<div class=\"ppa-scroll-x\"><table id=\"create-columns\">\n";
@@ -181,15 +159,6 @@
 				echo "<p><input type=\"hidden\" name=\"action\" value=\"create\" />\n";
 				echo "<input type=\"hidden\" name=\"stage\" value=\"3\" />\n";
 				echo $misc->form;
-				echo "<input type=\"hidden\" name=\"name\" value=\"", htmlspecialchars($_REQUEST['name']), "\" />\n";
-				echo "<input type=\"hidden\" name=\"fields\" id=\"create-fields\" value=\"", htmlspecialchars($_REQUEST['fields']), "\" />\n";
-				if (isset($_REQUEST['withoutoids'])) {
-					echo "<input type=\"hidden\" name=\"withoutoids\" value=\"true\" />\n";
-				}
-				echo "<input type=\"hidden\" name=\"tblcomment\" value=\"", htmlspecialchars($_REQUEST['tblcomment']), "\" />\n";
-				if (isset($_REQUEST['spcname'])) {
-					echo "<input type=\"hidden\" name=\"spcname\" value=\"", htmlspecialchars($_REQUEST['spcname']), "\" />\n";
-				}
 				echo "<input type=\"submit\" value=\"{$lang['strcreate']}\" />\n";
 				echo "<input type=\"submit\" name=\"cancel\" value=\"{$lang['strcancel']}\" /></p>\n";
 				echo "</form>\n";
@@ -503,6 +472,16 @@
 							$_REQUEST['values'][$attrs->fields['attnum']] = 'DEFAULT';
 						else
 							$_REQUEST['values'][$attrs->fields['attnum']] = $attrs->fields['adsrc'];
+
+						// An enum column defaulting to one of its values
+						// ('new'::status): preselect that value in its list
+						$labels = $data->getEnumLabels($attrs->fields['type']);
+						if ($labels !== null && !isset($_REQUEST['format'][$attrs->fields['attnum']])
+							&& preg_match("/^'((?:[^']|'')*)'::[^']+$/", (string) $attrs->fields['adsrc'], $m)
+							&& in_array(str_replace("''", "'", $m[1]), $labels, true)) {
+							$_REQUEST['values'][$attrs->fields['attnum']] = str_replace("''", "'", $m[1]);
+							$_REQUEST['format'][$attrs->fields['attnum']] = 'VALUE';
+						}
 					}
 					// Default format to 'VALUE' if there is no default,
 					// otherwise default to 'EXPRESSION'
@@ -516,7 +495,10 @@
 					echo "<td style=\"white-space:nowrap;\">\n";
 					echo $misc->printVal($data->formatType($attrs->fields['type'], $attrs->fields['atttypmod']));
 					echo "<input type=\"hidden\" name=\"types[{$attrs->fields['attnum']}]\" value=\"",
-						htmlspecialchars($attrs->fields['type']), "\" /></td>";
+						htmlspecialchars($attrs->fields['type']), "\" />";
+					if ($attrs->fields['attnotnull'])
+						echo "<input type=\"hidden\" name=\"notnulls[{$attrs->fields['attnum']}]\" value=\"1\" />";
+					echo "</td>";
 					echo "<td style=\"white-space:nowrap;\">\n";
 					echo "<select name=\"format[{$attrs->fields['attnum']}]\">\n";
 					echo "<option value=\"VALUE\"", ($_REQUEST['format'][$attrs->fields['attnum']] == 'VALUE') ? ' selected="selected"' : '', ">{$lang['strasvalue']}</option>\n";
@@ -541,7 +523,7 @@
 						);
 					}
 					else {
-						echo $data->printField("values[{$attrs->fields['attnum']}]", $_REQUEST['values'][$attrs->fields['attnum']], $attrs->fields['type']);
+						echo $data->printField("values[{$attrs->fields['attnum']}]", $_REQUEST['values'][$attrs->fields['attnum']], $attrs->fields['type'], array(), true);
 					}
 					echo "</td>\n";
 					echo "</tr>\n";
@@ -549,6 +531,7 @@
 					$attrs->moveNext();
 				}
 				echo "</table>\n";
+				echo "<p class=\"hint\">", htmlspecialchars($lang['strinsertblankhelp']), "</p>\n";
 
 				if (!isset($_SESSION['counter'])) { $_SESSION['counter'] = 0; }
 
@@ -581,8 +564,10 @@
 			$_POST['fields'] = safeUnserialize(htmlspecialchars_decode($_POST['fields'], ENT_QUOTES));
 
 			if ($_SESSION['counter']++ == $_POST['protection_counter']) {
+				// Fields left empty get the column's default (see insertRow)
+				$notnulls = (isset($_POST['notnulls']) && is_array($_POST['notnulls'])) ? $_POST['notnulls'] : array();
 				$status = $data->insertRow($_POST['table'], $_POST['fields'], $_POST['values'],
-											$_POST['nulls'], $_POST['format'], $_POST['types']);
+											$_POST['nulls'], $_POST['format'], $_POST['types'], $notnulls);
 				if ($status == 0) {
 					if (isset($_POST['insert']))
 						doDefault($lang['strrowinserted']);
@@ -756,6 +741,32 @@
 
 		$tables = $data->getTables();
 
+		/* A kind for what isn't a plain table, and a count for the small
+		 * tables nobody has analyzed yet: their estimate is unknown ("-"),
+		 * and counting a few megabytes is quick. */
+		$kinds = array(
+			'm' => $lang['strmaterializedview'],
+			'p' => $lang['strpartitionedtable'],
+			'f' => $lang['strforeigntable'],
+		);
+		$rows = array();
+		$has_kind = false;
+		$counted = 0;
+		while (is_object($tables) && !$tables->EOF) {
+			$row = $tables->fields;
+			$row['+kind'] = $kinds[$row['relkind'] ?? ''] ?? null;
+			if ($row['+kind'] !== null) $has_kind = true;
+			if ($row['reltuples'] === null && ($row['relkind'] ?? '') == 'r'
+				&& isset($row['heapsize']) && $row['heapsize'] <= 10 * 1024 * 1024 && $counted < 30) {
+				$row['reltuples'] = $data->countRowsQuietly($row['relname']);
+				$counted++;
+			}
+			$rows[] = $row;
+			$tables->moveNext();
+		}
+		include_once('./classes/ArrayRecordSet.php');
+		$tables = new ArrayRecordSet($rows);
+
 		$columns = array(
 			'table' => array(
 				'title' => $lang['strtable'],
@@ -767,14 +778,25 @@
 				'title' => $lang['strowner'],
 				'field' => field('relowner'),
 			),
+			'kind' => array(
+				'title' => $lang['strkind'],
+				'field' => field('+kind'),
+			),
 			'tablespace' => array(
 				'title' => $lang['strtablespace'],
 				'field' => field('tablespace')
+			),
+			'size' => array(
+				'title' => $lang['strsize'],
+				'field' => field('relsize'),
+				'type'  => 'prettysize',
+				'class' => 'ppa-num',
 			),
 			'tuples' => array(
 				'title' => $lang['strestimatedrowcount'],
 				'field' => field('reltuples'),
 				'type'  => 'numeric',
+				'class' => 'ppa-num',
 				'params'=> array('null' => '<span class="unknown" title="'. htmlspecialchars($lang['strrowsunknown']) .'">&mdash;</span>'),
 			),
 			'actions' => array(
@@ -910,8 +932,11 @@
 		);
 
 		if (!$data->hasTablespaces()) unset($columns['tablespace']);
-
-		$misc->printTable($tables, $columns, $actions, 'tables-tables', $lang['strnotables']);
+		if (!$has_kind) unset($columns['kind']);
+		// Mostly empty: only shown when some table is in another tablespace
+		$has_tablespace = false;
+		foreach ($rows as $row) if (($row['tablespace'] ?? null) !== null) $has_tablespace = true;
+		if (!$has_tablespace) unset($columns['tablespace']);
 
 		$navlinks = array (
 			'create' => array (
@@ -947,6 +972,7 @@
 			);
 		}
 		$misc->printNavLinks($navlinks, 'tables-tables', get_defined_vars());
+		$misc->printTable($tables, $columns, $actions, 'tables-tables', $lang['strnotables']);
 	}
 
 	require('./admin.php');

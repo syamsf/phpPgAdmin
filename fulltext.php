@@ -70,7 +70,6 @@
 			),
 		);
 
-		$misc->printTable($cfgs, $columns, $actions, 'fulltext-fulltext', $lang['strftsnoconfigs']);
 
 		$navlinks = array(
 			'createconf' => array (
@@ -90,6 +89,7 @@
 		);
 
 		$misc->printNavLinks($navlinks, 'fulltext-fulltext', get_defined_vars());
+		$misc->printTable($cfgs, $columns, $actions, 'fulltext-fulltext', $lang['strftsnoconfigs']);
 	}
 
 	function doDropConfig($confirm) {
@@ -435,7 +435,6 @@
 			),
 		);
 
-		$misc->printTable($dicts, $columns, $actions, 'fulltext-viewdicts', $lang['strftsnodicts']);
 
 		$navlinks = array(
 			'createdict' => array (
@@ -455,6 +454,7 @@
 		);
 
 		$misc->printNavLinks($navlinks, 'fulltext-viewdicts', get_defined_vars());
+		$misc->printTable($dicts, $columns, $actions, 'fulltext-viewdicts', $lang['strftsnodicts']);
 	}
 
 
@@ -529,7 +529,6 @@
 
 		);
 
-		$misc->printTable($map, $columns, $actions, 'fulltext-viewconfig', $lang['strftsemptymap']);
 
 		$navlinks = array(
 			'addmapping' => array (
@@ -550,6 +549,7 @@
 		);
 
 		$misc->printNavLinks($navlinks, 'fulltext-viewconfig', get_defined_vars());
+		$misc->printTable($map, $columns, $actions, 'fulltext-viewconfig', $lang['strftsemptymap']);
 	}
 
 	/**

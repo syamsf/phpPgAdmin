@@ -372,7 +372,6 @@
 		);
 
 		if (!$data->hasAlterAggregate()) unset($actions['alter']);
-		$misc->printTable($aggregates, $columns, $actions, 'aggregates-aggregates', $lang['strnoaggregates']);
 
 		$navlinks = array (
 			'create' => array (
@@ -391,6 +390,7 @@
 			)
 		);
 		$misc->printNavLinks($navlinks, 'aggregates-aggregates', get_defined_vars());
+		$misc->printTable($aggregates, $columns, $actions, 'aggregates-aggregates', $lang['strnoaggregates']);
 	}
 
 	/**
