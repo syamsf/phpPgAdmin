@@ -21,4 +21,5 @@
 	$plugin_lang['strreportneedsdef'] = 'You must give SQL for your report.';
 	$plugin_lang['strreportcreated'] = 'Report saved.';
 	$plugin_lang['strreportcreatedbad'] = 'Failed to save report.';
+	$plugin_lang['strreportsnorls'] = 'Row level security is not enabled on the reports table, so anyone could have changed these reports. They open in the SQL editor instead of running. See the upgrade note at the end of plugins/Report/sql/reports-pgsql.sql.';
 ?>

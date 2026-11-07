@@ -91,11 +91,13 @@ function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
 		// reason is in the warning pg_connect() raised just before.
 		$loginErrorDetail = loginErrorDetail($errmsg);
 		$loginErrorReason = loginErrorReason($loginErrorDetail);
+		if ($loginErrorDetail !== '')
+			error_log('phpPgAdmin login failed: ' . preg_replace('/\s+/', ' ', $loginErrorDetail));
 		include('./login.php');
 		exit;
 		break;
 	default:
-		$s = "$dbms error: [$errno: $errmsg] in $fn($p1, $p2)\n";
+		$s = htmlspecialchars("$dbms error: [$errno: $errmsg] in $fn(" . (is_scalar($p1) ? $p1 : '') . ", " . (is_scalar($p2) ? $p2 : '') . ")") . "\n";
 		echo "<table class=\"error\" cellpadding=\"5\"><tr><td>{$s}</td></tr></table><br />\n";
 		break;
 	}

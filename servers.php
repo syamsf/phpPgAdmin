@@ -66,7 +66,7 @@
 			'server' => array(
 				'title' => $lang['strserver'],
 				'field' => field('desc'),
-				'url'   => "redirect.php?subject=server&amp;",
+				'url'   => "redirect.php?subject=server&",
 				'vars'  => array('server' => 'id'),
 			),
 			'host' => array(

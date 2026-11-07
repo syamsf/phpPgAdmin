@@ -25,13 +25,11 @@
 	$misc->printTitle(sprintf($lang['strlogintitle'], $server_info['desc'] ?? ''));
 
 	if (isset($msg)) {
-		if (!empty($loginErrorReason) || !empty($loginErrorDetail)) {
-			// A failed connection: say why, and show the server's own words.
+		if (!empty($loginErrorReason)) {
+			// A failed connection: say why in plain words. The server's own
+			// message (host, port, addresses) goes to the log, not the page.
 			echo "<div class=\"message error login-error\" role=\"alert\"><p><strong>", htmlspecialchars($msg), "</strong>";
-			if (!empty($loginErrorReason)) echo " ", htmlspecialchars($loginErrorReason);
-			echo "</p>\n";
-			if (!empty($loginErrorDetail))
-				echo "<pre class=\"login-error-detail\">", htmlspecialchars($loginErrorDetail), "</pre>\n";
+			echo " ", htmlspecialchars($loginErrorReason), "</p>\n";
 			echo "</div>\n";
 		} else {
 			$misc->printMsg($msg);
@@ -45,14 +43,14 @@
 <?php
 	if (!empty($_POST)) $vars =& $_POST;
 	else $vars =& $_GET;
-	// Pass request vars through form (is this a security risk???)
-	foreach ($vars as $key => $val) {
-		$key = (string) $key;
-		if (substr($key,0,5) == 'login') continue;
-		if (!is_scalar($val)) continue;
-		echo "<input type=\"hidden\" name=\"", htmlspecialchars($key), "\" value=\"", htmlspecialchars((string) $val), "\" />\n";
+	// Carry over where the user was going, never an action: a link that
+	// says action=drop must not drop anything once they log in.
+	foreach (Misc::LOGIN_PASSTHROUGH as $key) {
+		if (!isset($vars[$key]) || !is_scalar($vars[$key])) continue;
+		echo "<input type=\"hidden\" name=\"", htmlspecialchars($key), "\" value=\"", htmlspecialchars((string) $vars[$key]), "\" />\n";
 	}
 ?>
+	<input type="hidden" name="ppa_csrf" value="<?php echo htmlspecialchars($misc->csrfToken()); ?>" />
 	<input type="hidden" name="loginServer" value="<?php echo htmlspecialchars($server); ?>" />
 	<table class="navbar login">
 		<tr>

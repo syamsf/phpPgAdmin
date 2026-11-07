@@ -274,13 +274,14 @@ async function run(page, key = 'Control') {
 	await Promise.all([page.waitForNavigation(), page.click('#sqledit-find input[type=submit]')]);
 	ok(/database\.php/.test(page.url()) && /orders/.test(await page.content()), 'find: search runs on database.php in the same page');
 
-	// History page re-run
+	// History page: "Open in editor" (a GET never runs the query)
 	await page.goto(BASE + `history.php?server=${Q}&database=ppa_test`, { waitUntil: 'load' });
 	await shot(page, '08-history-page');
-	const runLink = await page.$$eval('a', (a) => a.filter((e) => /sql\.php\?subject=history/.test(e.href)).map((e) => [e.href, e.target]));
-	ok(runLink.length > 0 && runLink.every((l) => !l[1]), 'history page: re-run links without target');
-	await Promise.all([page.waitForNavigation(), page.goto(runLink[0][0])]);
-	ok(await page.$('.CodeMirror') !== null && /Query Results/.test(await page.title()), 'history page: re-run link opens results');
+	const editLinks = await page.$$eval('a', (a) => a.filter((e) => /database\.php\?.*action=sql.*queryid=/.test(e.href)).map((e) => [e.href, e.target]));
+	ok(editLinks.length > 0 && editLinks.every((l) => !l[1]), 'history page: open-in-editor links without target');
+	ok((await page.$$eval('a', (a) => a.filter((e) => /sql\.php\?subject=history/.test(e.href)).length)) === 0, 'history page: no link runs a query');
+	await Promise.all([page.waitForNavigation(), page.goto(editLinks[0][0])]);
+	ok(await page.$('.CodeMirror') !== null && /SELECT|select/.test(await page.evaluate(() => document.querySelector('.CodeMirror').CodeMirror.getValue())), 'history page: open-in-editor shows the query in the editor');
 
 	// Dark theme
 	await page.goto(BASE + `database.php?subject=database&server=${Q}&database=ppa_test&action=sql&theme=dark`, { waitUntil: 'load' });

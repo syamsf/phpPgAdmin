@@ -43,7 +43,7 @@ const rowLink = (action, id) => `a[href*="action=${action}"][href*="key%5Bid%5D=
 
 async function sql(query) {
 	await page.evaluate(async (q, server) => {
-		const body = new URLSearchParams({ server, database: 'ppa_test', query: q });
+		const body = new URLSearchParams({ ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content,  server, database: 'ppa_test', query: q });
 		await fetch('sql.php', { method: 'POST', body });
 	}, query, SERVER);
 }
@@ -51,8 +51,10 @@ async function sql(query) {
 try {
 	await page.goto(BASE + 'intro.php', { waitUntil: 'networkidle0' });
 	await page.evaluate(async (server, pw) => {
-		await fetch('redirect.php', { method: 'POST', body: new URLSearchParams({ subject: 'server', server, loginServer: server, loginUsername: 'ppa', ['loginPassword_' + pw]: 'ppa', loginSubmit: 'Login' }) });
+		await fetch('redirect.php', { method: 'POST', body: new URLSearchParams({ ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content,  subject: 'server', server, loginServer: server, loginUsername: 'ppa', ['loginPassword_' + pw]: 'ppa', loginSubmit: 'Login' }) });
 	}, SERVER, crypto.createHash('md5').update(SERVER).digest('hex'));
+	// The login renews the CSRF token, so take the page's new one.
+	await page.goto(BASE + 'intro.php', { waitUntil: 'networkidle0' });
 	await sql(`DROP TABLE IF EXISTS public.${TABLE}; CREATE TABLE public.${TABLE} (id int PRIMARY KEY, name text NOT NULL, note text);
 		INSERT INTO public.${TABLE} SELECT i, 'row ' || i, NULL FROM generate_series(1, 10) i;`);
 
@@ -167,6 +169,23 @@ try {
 	await idle(); await sleep(500);
 	check(!(await anyDialog()), 'dropping closes the modal');
 	check(!(await page.evaluate((t) => document.querySelector('#ppa-main').innerText.includes(t + '\n'), TABLE)) && /tables\.php/.test(page.url()), 'table list is shown again without it');
+
+	// FK autocomplete on the insert form: a jQuery POST that needs the CSRF header
+	await page.goto(`${BASE}tables.php?server=${Q}&database=ppa_test&schema=shop&table=orders&subject=table&action=confinsertrow`, { waitUntil: 'networkidle0' });
+	const fkField = await page.$('input[id^="attr_"][name^="values"], #row_att_2 input, input[name="values[customer_id]"]');
+	if (fkField) {
+		const fkInfo = await page.evaluate(() => {
+			const el = [...document.querySelectorAll('input[id^="attr_"]')].find((i) => /customer_id/.test(i.name) || /customer_id/.test((i.closest('tr') || {}).innerText || ''));
+			if (!el) return null;
+			el.focus(); return el.id;
+		});
+		check(!!fkInfo, 'insert form has the customer_id field');
+		if (fkInfo) {
+			await page.keyboard.type('1');
+			await page.waitForFunction(() => document.querySelector('#fklist') && document.querySelector('#fklist').querySelectorAll('tr').length > 0, { timeout: 5000 }).catch(() => {});
+			check(await page.evaluate(() => document.querySelectorAll('#fklist tr').length > 0), 'FK autocomplete lists matching rows');
+		}
+	} else check(false, 'insert form has the customer_id field');
 
 	// Dark theme and phone
 	await sql(`CREATE TABLE public.${TABLE} (id int PRIMARY KEY, name text NOT NULL, note text); INSERT INTO public.${TABLE} VALUES (1, 'one', 'x');`);

@@ -134,7 +134,7 @@
 			'operator' => array(
 				'title' => $lang['stroperator'],
 				'field' => field('oprname'),
-				'url'   => "operators.php?action=properties&amp;{$misc->href}&amp;",
+				'url'   => "operators.php?action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('operator' => 'oprname', 'operator_oid' => 'oid'),
 			),
 			'leftarg' => array(

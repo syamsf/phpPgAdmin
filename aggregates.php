@@ -318,7 +318,7 @@
 			'aggrname' => array(
 				'title' => $lang['strname'],
 				'field' => field('proname'),
-				'url'   => "redirect.php?subject=aggregate&amp;action=properties&amp;{$misc->href}&amp;",
+				'url'   => "redirect.php?subject=aggregate&action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('aggrname' => 'proname', 'aggrtype' => 'proargtypes'),
 			),
 			'aggrtype' => array(

@@ -26,6 +26,10 @@
 	$lang['strlogin'] = 'Login';
 	$lang['strloginfailed'] = 'Login failed.';
 	$lang['strmoreactions'] = 'More actions';
+	$lang['strcsrftitle'] = 'Form expired';
+	$lang['strconfcancelquery'] = 'Cancel the query that process %d is running?';
+	$lang['strconfkillprocess'] = 'End process %d and its connection?';
+	$lang['strcsrffailed'] = 'This form has expired, or came from another site. Go back, reload the page, then try again.';
 	$lang['strinputas'] = 'Entered as';
 	$lang['strinputashelp'] = 'A plain value is stored as typed. An SQL expression, such as now() or nextval(...), is computed by the server.';
 	$lang['strasvalue'] = 'Plain value';

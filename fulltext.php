@@ -27,7 +27,7 @@
 			'configuration' => array(
 				'title' => $lang['strftsconfig'],
 				'field' => field('name'),
-				'url'   => "fulltext.php?action=viewconfig&amp;{$misc->href}&amp;",
+				'url'   => "fulltext.php?action=viewconfig&{$misc->hrefRaw}&",
 				'vars'	=> array('ftscfg' => 'name'),
 			),
 			'schema' => array(
@@ -784,7 +784,7 @@
 				echo "<input type=\"hidden\" name=\"mapping\" value=\"", htmlspecialchars($_REQUEST['mapping']), "\" />\n";
 			}
 
-			echo "<input type=\"hidden\" name=\"ftscfg\" value=\"{$_REQUEST['ftscfg']}\" />\n";
+			echo "<input type=\"hidden\" name=\"ftscfg\" value=\"", htmlspecialchars($_REQUEST['ftscfg']), "\" />\n";
 			echo "<input type=\"hidden\" name=\"action\" value=\"dropmapping\" />\n";
 			echo "<input type=\"hidden\" name=\"prev_action\" value=\"viewconfig\" /></p>\n";
 			echo $misc->form;
@@ -843,10 +843,10 @@
 					$ma_mappings[] = $data->getFtsMappingByName($_POST['ftscfg'], $a['mapping']);
 					$ma_mappings_names[] = $a['mapping'];
 				}
-				echo implode(", ", $ma_mappings_names);
+				echo htmlspecialchars(implode(", ", $ma_mappings_names));
 			} else {
 				$mapping = $data->getFtsMappingByName($_POST['ftscfg'], $_POST['formMapping']);
-				echo $mapping->fields['name'];
+				echo htmlspecialchars($mapping->fields['name'] ?? $_POST['formMapping']);
 				echo "<input type=\"hidden\" name=\"formMapping\" value=\"", htmlspecialchars($_POST['formMapping']), "\" />\n";
 			}
 

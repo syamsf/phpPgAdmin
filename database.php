@@ -21,9 +21,30 @@
 	 * Sends a signal to a process
 	 */
 	function doSignal() {
-		global $data, $lang;
+		global $data, $misc, $lang;
 
-		$status = $data->sendSignal($_REQUEST['pid'], $_REQUEST['signal']);
+		$signal = (isset($_REQUEST['signal']) && $_REQUEST['signal'] === 'KILL') ? 'KILL' : 'CANCEL';
+		$pid = isset($_REQUEST['pid']) ? (int) $_REQUEST['pid'] : 0;
+
+		// A link only asks; the signal is sent by the form it shows (POST).
+		if (!Misc::isPost() || isset($_POST['cancel'])) {
+			if (isset($_POST['cancel'])) { doProcesses(); return; }
+			$misc->printTrail('database');
+			$misc->printTabs('database', 'processes');
+			$misc->printTitle($signal === 'KILL' ? $lang['strkill'] : $lang['strcancel']);
+			echo "<p>", htmlspecialchars(sprintf($signal === 'KILL' ? $lang['strconfkillprocess'] : $lang['strconfcancelquery'], $pid)), "</p>\n";
+			echo "<form action=\"database.php\" method=\"post\">\n";
+			echo $misc->form;
+			echo "<input type=\"hidden\" name=\"action\" value=\"signal\" />\n";
+			echo "<input type=\"hidden\" name=\"signal\" value=\"{$signal}\" />\n";
+			echo "<input type=\"hidden\" name=\"pid\" value=\"{$pid}\" />\n";
+			echo "<input type=\"submit\" name=\"yes\" value=\"", htmlspecialchars($signal === 'KILL' ? $lang['strkill'] : $lang['strcancel']), "\" />\n";
+			echo "<input type=\"submit\" name=\"cancel\" value=\"", htmlspecialchars($lang['strno']), "\" />\n";
+			echo "</form>\n";
+			return;
+		}
+
+		$status = $data->sendSignal($pid, $signal);
 		if ($status == 0)
 			doProcesses($lang['strsignalsent']);
 		else
@@ -650,13 +671,13 @@
 		$scripts .= "<script type=\"text/javascript\">\n";
 		$scripts .= "var Database = {\n";
 		$scripts .= "ajax_time_refresh: {$refreshTime},\n";
-		$scripts .= "str_start: {text:'". addslashes($lang['strautorefreshstart']) ."',icon: '". $misc->icon('Execute') ."'},\n";
-		$scripts .= "str_stop: {text:'". addslashes($lang['strautorefreshstop']) ."',icon: '". $misc->icon('Stop') ."'},\n";
-		$scripts .= "load_icon: '". $misc->icon('Loading') ."',\n";
-		$scripts .= "server:'{$_REQUEST['server']}',\n";
-		$scripts .= "dbname:'{$_REQUEST['database']}',\n";
-		$scripts .= "action:'refresh_{$action}',\n";
-		$scripts .= "errmsg: '". str_replace("'", "\'", $lang['strconnectionfail']) ."'\n";
+		$scripts .= "str_start: {text:". Misc::jsValue($lang['strautorefreshstart']) .",icon: ". Misc::jsValue($misc->icon('Execute')) ."},\n";
+		$scripts .= "str_stop: {text:". Misc::jsValue($lang['strautorefreshstop']) .",icon: ". Misc::jsValue($misc->icon('Stop')) ."},\n";
+		$scripts .= "load_icon: ". Misc::jsValue($misc->icon('Loading')) .",\n";
+		$scripts .= "server:". Misc::jsValue($_REQUEST['server']) .",\n";
+		$scripts .= "dbname:". Misc::jsValue($_REQUEST['database']) .",\n";
+		$scripts .= "action:". Misc::jsValue("refresh_{$action}") .",\n";
+		$scripts .= "errmsg: ". Misc::jsValue($lang['strconnectionfail']) ."\n";
 		$scripts .= "};\n";
 		$scripts .= "</script>\n";
 	}

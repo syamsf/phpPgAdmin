@@ -68,6 +68,7 @@
 		_printConnectionForm();
 
 		echo "<form action=\"database.php\" method=\"post\" id=\"sqledit-find\">\n";
+		echo $misc->csrfField();
 		_printConnection();
 		echo "<p><input name=\"term\" value=\"", htmlspecialchars($_REQUEST['term']),
 			"\" size=\"32\" maxlength=\"{$data->_maxNameLen}\" autofocus=\"autofocus\" />\n";
@@ -114,6 +115,7 @@
 		_printConnectionForm();
 
 		echo "<form action=\"sql.php\" method=\"post\" enctype=\"multipart/form-data\" id=\"sql-editor-form\" class=\"sql-editor-form\">\n";
+		echo $misc->csrfField();
 		_printConnection();
 		echo "\n";
 		if (!isset($_REQUEST['search_path']))

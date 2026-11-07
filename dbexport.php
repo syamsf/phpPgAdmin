@@ -58,6 +58,10 @@
 				header('Content-Type: application/download');
 				header('Content-Disposition: attachment; filename=dump.sql.gz');
 				break;
+			default:
+				// Whatever else was asked for, never let the browser guess.
+				header('Content-Type: text/plain');
+				break;
 		}
 
 		// Set environmental variables that pg_dump uses
@@ -70,6 +74,14 @@
 		$port = $server_info['port'];
 		if ($port !== null && $port != '') {
 			putenv('PGPORT=' . $port);
+		}
+		// The same SSL settings the connection itself uses.
+		$sslmode = Connection::sslmodeForLibpq($server_info['sslmode'] ?? null);
+		if ($sslmode !== null) {
+			putenv('PGSSLMODE=' . $sslmode);
+		}
+		if (!empty($server_info['sslrootcert'])) {
+			putenv('PGSSLROOTCERT=' . $server_info['sslrootcert']);
 		}
 
 		// Build command for executing pg_dump.
@@ -129,7 +141,9 @@
 		}
 
 		if (!$dumpall) {
-			putenv('PGDATABASE=' . ($_REQUEST['database'] ?? ''));
+			// The database this request is connected to: for a per-database
+			// login that is always the one it is scoped to.
+			putenv('PGDATABASE=' . $_curr_db);
 		}
 
 		// Execute command and return the output to the screen

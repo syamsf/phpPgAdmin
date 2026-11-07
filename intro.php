@@ -71,7 +71,7 @@
 <noscript><p><input type="submit" value="<?php echo $lang['stralter'] ?>" /></p></noscript>
 </form>
 
-<p class="hint"><?php echo "$appName $appVersion (PHP ". phpversion() .')' ?></p>
+<p class="hint"><?php echo "$appName $appVersion" ?></p>
 
 <ul class="intro">
 	<li><a href="https://github.com/ReimuHakurei/phpPgAdmin"><?php echo $lang['strppahome'] ?></a></li>

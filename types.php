@@ -78,9 +78,9 @@
 					$vals = $vals->getArray();
 					$nbVals = count($vals);
 					echo "<tr>\n\t<th class=\"data left\" rowspan=\"$nbVals\">{$lang['strenumvalues']}</th>\n";
-					echo "<td class=\"data2\">{$vals[0]['enumval']}</td></tr>\n";
+					echo "<td class=\"data2\">", htmlspecialchars($vals[0]['enumval']), "</td></tr>\n";
 					for ($i=1; $i < $nbVals; $i++)
-						echo "<td class=\"data", 2-($i%2), "\">{$vals[$i]['enumval']}</td></tr>\n";
+						echo "<td class=\"data", 2-($i%2), "\">", htmlspecialchars($vals[$i]['enumval']), "</td></tr>\n";
 				}
 				echo "</table>\n";
 			}
@@ -544,7 +544,7 @@
 			'type' => array(
 				'title' => $lang['strtype'],
 				'field' => field('typname'),
-				'url'   => "types.php?action=properties&amp;{$misc->href}&amp;",
+				'url'   => "types.php?action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('type' => 'basename'),
 			),
 			'owner' => array(

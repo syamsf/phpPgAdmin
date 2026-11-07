@@ -91,6 +91,18 @@
 	$misc->setHREF();
 	$misc->setForm();
 
+	// Every POST must carry this session's token: a form on another site
+	// (or a link that ends in a POST) can't know it. This covers the login
+	// form too, so no other site can log the user in as someone else.
+	if (Misc::isPost() && !$misc->checkCsrf()) {
+		http_response_code(403);
+		$misc->printHeader($lang['strcsrftitle']);
+		$misc->printBody();
+		$misc->printMsg($lang['strcsrffailed']);
+		$misc->printFooter();
+		exit;
+	}
+
 	// Enforce PHP environment
 	ini_set('arg_separator.output', '&amp;');
 
@@ -115,6 +127,24 @@
 			$_SESSION['sharedPassword'] = $_POST['loginPassword_'.md5($_POST['loginServer'])];
 		}
 
+		// A new session id for the logged-in session (no fixation), and a
+		// fresh GET of the page: nothing posted with the login form runs.
+		session_regenerate_id(true);
+		unset($_SESSION['ppa_csrf']); // a new token for the logged-in session
+		$_SESSION['ppa_reload_browser'] = true;
+		$_login_target = array();
+		foreach (Misc::LOGIN_PASSTHROUGH as $_login_key) {
+			if (isset($_POST[$_login_key]) && is_scalar($_POST[$_login_key]))
+				$_login_target[$_login_key] = (string) $_POST[$_login_key];
+		}
+		$_login_script = basename($_SERVER['SCRIPT_NAME'] ?? '');
+		if (!preg_match('/^[a-z_]+\.php$/', $_login_script)) $_login_script = 'redirect.php';
+		header('Location: ' . $_login_script . ($_login_target ? '?' . http_build_query($_login_target, '', '&') : ''), true, 303);
+		exit;
+	}
+	// The tree reloads on the first page after a login.
+	if (!empty($_SESSION['ppa_reload_browser'])) {
+		unset($_SESSION['ppa_reload_browser']);
 		$_reload_browser = true;
 	}
 

@@ -193,6 +193,7 @@
 			}
 		
 			echo "<form action=\"roles.php\" method=\"post\">\n";
+			echo $misc->csrfField();
 			echo "<table>\n";
 			echo "\t<tr>\n\t\t<th class=\"data left\" style=\"width: 130px\">{$lang['strname']}</th>\n";
 			echo "\t\t<td class=\"data1\">", ($canRename ? "<input name=\"formNewRoleName\" size=\"15\" maxlength=\"{$data->_maxNameLen}\" value=\"" . htmlspecialchars($_POST['formNewRoleName']) . "\" />" : $misc->printVal($roledata->fields['rolname'])), "</td>\n\t</tr>\n";
@@ -608,7 +609,7 @@
 			'role' => array(
 				'title' => $lang['strrole'],
 				'field' => field('rolname'),
-				'url'   => "redirect.php?subject=role&amp;action=properties&amp;{$misc->href}&amp;",
+				'url'   => "redirect.php?subject=role&action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('rolename' => 'rolname'),
 			),
 			'superuser' => array(

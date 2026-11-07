@@ -8,6 +8,8 @@
 	class Misc {
 		// Tracking string to include in HREFs
 		public $href;
+		/** The same query string, not HTML-escaped (for URLs that are escaped later). */
+		public $hrefRaw;
 		// Tracking string to include in forms
 		public $form;
 
@@ -30,12 +32,13 @@
 		 */
 		function setHREF() {
 			$this->href = $this->getHREF();
+			$this->hrefRaw = $this->getHREF(null, true);
 		}
 
 		/**
 		 * Get a href query string, excluding objects below the given object type (inclusive)
 		 */
-		function getHREF($exclude_from = null) {
+		function getHREF($exclude_from = null, $raw = false) {
 			$href = '';
 			if (isset($_REQUEST['server']) && $exclude_from != 'server') {
 				$href .= 'server=' . urlencode($_REQUEST['server']);
@@ -46,7 +49,7 @@
 					}
 				}
 			}
-			return htmlentities($href);
+			return $raw ? $href : htmlentities($href);
 		}
 
 		function getSubjectParams($subject) {
@@ -201,10 +204,45 @@
 		}
 
 		/**
+		 * This session's token against cross-site requests: every POST must
+		 * carry it (a form field or the X-PPA-CSRF header), see checkCsrf().
+		 */
+		function csrfToken() {
+			// After the session lock is released (ppa_session_release) the
+			// token made at the start of the request is still in $_SESSION.
+			if (session_status() !== PHP_SESSION_ACTIVE)
+				return isset($_SESSION['ppa_csrf']) && is_string($_SESSION['ppa_csrf']) ? $_SESSION['ppa_csrf'] : '';
+			if (empty($_SESSION['ppa_csrf']) || !is_string($_SESSION['ppa_csrf']))
+				$_SESSION['ppa_csrf'] = bin2hex(random_bytes(32));
+			return $_SESSION['ppa_csrf'];
+		}
+
+		/** The hidden field with the token, for forms that don't print $misc->form. */
+		function csrfField() {
+			return "<input type=\"hidden\" name=\"ppa_csrf\" value=\"" . htmlspecialchars($this->csrfToken()) . "\" />\n";
+		}
+
+				/** True when the request carries this session's token. */
+		function checkCsrf() {
+			$expected = $this->csrfToken();
+			if ($expected === '') return false;
+			// Either the form field or the header may carry it.
+			foreach (array($_POST['ppa_csrf'] ?? null, $_SERVER['HTTP_X_PPA_CSRF'] ?? null) as $given) {
+				if (is_string($given) && hash_equals($expected, $given)) return true;
+			}
+			return false;
+		}
+
+		/** True for a POST, which (see lib.inc.php) has passed checkCsrf(). */
+		static function isPost() {
+			return ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
+		}
+
+		/**
 		 * Sets the form tracking variable
 		 */
 		function setForm() {
-			$this->form = '';
+			$this->form = "<input type=\"hidden\" name=\"ppa_csrf\" value=\"" . htmlspecialchars($this->csrfToken()) . "\" />\n";
 			if (isset($_REQUEST['server'])) {
 				$this->form .= "<input type=\"hidden\" name=\"server\" value=\"" . htmlspecialchars($_REQUEST['server']) . "\" />\n";
 				if (isset($_REQUEST['database'])) {
@@ -246,6 +284,28 @@
 		 *
 		 * @return string The HTML rendered value
 		 */
+		/**
+		 * A PHP value as a JavaScript expression (quotes included), safe inside
+		 * an inline <script>: <, >, & and both quote kinds become \u escapes, so
+		 * it can neither end the script nor leave its string. Call sites write
+		 * `var x = <?= Misc::jsValue($v) ?>` with no quotes of their own.
+		 */
+		static function jsValue($v) {
+			return json_encode($v, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE);
+		}
+
+		/**
+		 * Maps a type name that came from the database to a printVal() display
+		 * mode. A type's name is chosen by whoever created it (and carries no
+		 * schema), so only the built-in types with a special rendering are let
+		 * through; anything else gets the escaped default (null).
+		 */
+		static function dataType($pgType) {
+			static $known = array('int2', 'int4', 'int8', 'float4', 'float8', 'money', 'numeric',
+				'oid', 'xid', 'cid', 'tid', 'bool', 'boolean', 'bytea');
+			return in_array($pgType, $known, true) ? $pgType : null;
+		}
+
 		function printVal($str, $type = null, $params = array()) {
 			global $lang, $conf, $data;
 
@@ -311,7 +371,7 @@
 					break;
 				case 'macaddr':
 					$tag = 'tt';
-					$out = $str;
+					$out = htmlspecialchars($str);
 					break;
 				case 'errormsg':
 					$tag = 'pre';
@@ -336,7 +396,9 @@
 					$out = $params['function']($str, $params);
 					break;
 				case 'prettysize':
-					if ($str == -1)
+					if (!is_numeric($str))
+						$out = htmlspecialchars($str);
+					elseif ($str == -1)
 						$out = $lang['strnoaccess'];
 					else
 					{
@@ -525,7 +587,9 @@
 				$server_info['sslmode'],
 				$server_info['username'],
 				$server_info['password'],
-				$database
+				$database,
+				ADODB_FETCH_ASSOC,
+				$server_info['sslrootcert'] ?? ''
 			);
 
 			// Don't hand these to child processes (pg_dump).
@@ -614,11 +678,13 @@
 				$jquery = htmlspecialchars($this->asset('libraries/js/jquery.js'));
 				$appjs = htmlspecialchars($this->asset('js/app.js'));
 				$treejs = htmlspecialchars($this->asset('js/tree.js'));
+				$csrf = htmlspecialchars($this->csrfToken());
 
 				echo <<<EOL
 				<head>
 					<meta charset="utf-8" />
 					<meta name="viewport" content="width=device-width, initial-scale=1" />
+					<meta name="ppa-csrf" content="{$csrf}" />
 					<link rel="stylesheet" href="{$css}" id="csstheme" data-theme="{$theme}" />
 					<link rel="shortcut icon" href="{$favicon}" type="image/vnd.microsoft.icon" />
 					<link rel="icon" type="image/png" href="{$appicon}" />
@@ -639,7 +705,7 @@
 				$plugins_head = array();
 				$_params = array('heads' => &$plugins_head);
 
-				$plugin_manager->do_hook('head', $_params);
+				if (isset($plugin_manager)) $plugin_manager->do_hook('head', $_params);
 
 				foreach($plugins_head as $tag) {
 					echo $tag;
@@ -2081,6 +2147,13 @@
 		 *					 The function must not must not store urls because
 		 *					 they are relative and won't work out of context.
 		 */
+		/**
+		 * The only request values the login page carries over to the page
+		 * shown after login: where to go, never what to do there.
+		 */
+		const LOGIN_PASSTHROUGH = array('server', 'database', 'schema', 'subject', 'table', 'view',
+			'sequence', 'function', 'function_oid', 'type', 'domain', 'return');
+
 		/** Action keys that destroy or stop something: shown last, in red. */
 		const DANGER_ACTIONS = '/^(drop|empty|delete|remove|truncate|cancel|kill|terminate|purge|revoke)/i';
 
@@ -2159,10 +2232,11 @@
 
 				if ($ma !== null) {
 					echo "<script src=\"", htmlspecialchars($this->asset('multiactionform.js')), "\"></script>\n";
-					echo "<form id=\"multi_form\" action=\"{$ma['url']}\" method=\"post\" enctype=\"multipart/form-data\">\n";
+					echo "<form id=\"multi_form\" action=\"", htmlspecialchars($ma['url']), "\" method=\"post\" enctype=\"multipart/form-data\">\n";
+					echo $this->csrfField();
 					if (isset($ma['vars']))
 						foreach ($ma['vars'] as $k => $v)
-							echo "<input type=\"hidden\" name=\"$k\" value=\"$v\" />";
+							echo "<input type=\"hidden\" name=\"", htmlspecialchars($k), "\" value=\"", htmlspecialchars($v), "\" />";
 				}
 
 				echo "<table>\n";
@@ -2236,7 +2310,7 @@
 								$val = value($column['field'], $tabledata->fields);
 								if (!is_null($val)) {
 									if (isset($column['url'])) {
-										echo "<a href=\"{$column['url']}";
+										echo "<a href=\"", htmlspecialchars($column['url']);
 										$misc->printUrlVars($column['vars'], $tabledata->fields);
 										echo "\">";
 									}
@@ -2715,8 +2789,10 @@
 			$server_info = is_scalar($server_id) && isset($targets[$server_id]) ? $targets[$server_id] : null;
 
 			if (isset($_SESSION['webdbLogin'][$server_id ?? ''])) {
+				// A login for something that is no longer configured is not
+				// honoured: null sends the user to the login page.
 				if ($server_info === null)
-					return $_SESSION['webdbLogin'][$server_id ?? ''];
+					return null;
 
 				return array_merge($server_info, $_SESSION['webdbLogin'][$server_id ?? '']);
 			}
@@ -2935,20 +3011,10 @@
 				foreach ($fksprops['byconstr'] as $conid => $props) {
 					$fksprops['code'] .= "constrs.constr_{$conid} = {\n";
 					$fksprops['code'] .= 'pattnums: ['. implode(',',$props['pattnums']) ."],\n";
-					$fksprops['code'] .= "f_table:'". addslashes(htmlentities($props['f_table'], ENT_QUOTES, 'UTF-8')) ."',\n";
-					$fksprops['code'] .= "f_schema:'". addslashes(htmlentities($props['f_schema'], ENT_QUOTES, 'UTF-8')) ."',\n";
-					$_ = '';
-					foreach ($props['pattnames'] as $n) {
-						$_ .= ",'". htmlentities($n, ENT_QUOTES, 'UTF-8') ."'";
-					}
-					$fksprops['code'] .= 'pattnames: ['. substr($_, 1) ."],\n";
-
-					$_ = '';
-					foreach ($props['fattnames'] as $n) {
-						$_ .= ",'". htmlentities($n, ENT_QUOTES, 'UTF-8') ."'";
-					}
-
-					$fksprops['code'] .= 'fattnames: ['. substr($_, 1) ."]\n";
+					$fksprops['code'] .= 'f_table: '. Misc::jsValue($props['f_table']) .",\n";
+					$fksprops['code'] .= 'f_schema: '. Misc::jsValue($props['f_schema']) .",\n";
+					$fksprops['code'] .= 'pattnames: '. Misc::jsValue(array_values($props['pattnames'])) .",\n";
+					$fksprops['code'] .= 'fattnames: '. Misc::jsValue(array_values($props['fattnames'])) ."\n";
 					$fksprops['code'] .= "};\n";
 				}
 
@@ -2957,9 +3023,9 @@
 					$fksprops['code'] .= "attrs.attr_{$attnum} = [". implode(',', $fksprops['byfield'][$attnum]) ."];\n";
 				}
 
-				$fksprops['code'] .= "var table='". addslashes(htmlentities($table, ENT_QUOTES, 'UTF-8')) ."';";
-				$fksprops['code'] .= "var server='". htmlentities($_REQUEST['server'], ENT_QUOTES, 'UTF-8') ."';";
-				$fksprops['code'] .= "var database='". addslashes(htmlentities($_REQUEST['database'], ENT_QUOTES, 'UTF-8')) ."';";
+				$fksprops['code'] .= 'var table='. Misc::jsValue($table) .';';
+				$fksprops['code'] .= 'var server='. Misc::jsValue($_REQUEST['server']) .';';
+				$fksprops['code'] .= 'var database='. Misc::jsValue($_REQUEST['database']) .';';
 				$fksprops['code'] .= "</script>\n";
 
 				$fksprops['code'] .= '<div id="fkbg"></div>';

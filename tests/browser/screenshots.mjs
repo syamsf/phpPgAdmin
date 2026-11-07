@@ -33,7 +33,7 @@ async function go(url) {
 }
 async function sql(query) {
 	await page.evaluate(async (q, server) => {
-		await fetch('sql.php', { method: 'POST', body: new URLSearchParams({ server, database: 'ppa_test', query: q }) });
+		await fetch('sql.php', { method: 'POST', body: new URLSearchParams({ ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content,  server, database: 'ppa_test', query: q }) });
 	}, query, SERVER);
 }
 async function openTree(...names) {
@@ -49,7 +49,7 @@ async function openTree(...names) {
 // Log in and add sample data.
 await go('intro.php');
 await page.evaluate(async (server, pw) => {
-	await fetch('redirect.php', { method: 'POST', body: new URLSearchParams({ subject: 'server', server, loginServer: server, loginUsername: 'ppa', ['loginPassword_' + pw]: 'ppa', loginSubmit: 'Login' }) });
+	await fetch('redirect.php', { method: 'POST', body: new URLSearchParams({ ppa_csrf: document.querySelector('meta[name="ppa-csrf"]').content,  subject: 'server', server, loginServer: server, loginUsername: 'ppa', ['loginPassword_' + pw]: 'ppa', loginSubmit: 'Login' }) });
 }, SERVER, crypto.createHash('md5').update(SERVER).digest('hex'));
 await sql(`
 	INSERT INTO shop.customer (name, email)

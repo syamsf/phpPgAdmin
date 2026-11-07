@@ -112,6 +112,12 @@ A per-database login only sees its own database: the server-wide pages
 (database list, roles, tablespaces, full export) aren't available with it.
 Servers without a `/` part keep a single login for the whole server.
 
+A per-database login is a restriction of this web interface, not of
+PostgreSQL. The user can still connect to any database that `pg_hba.conf` and
+the database's `CONNECT` privilege allow, with any other client. For real
+isolation use `pg_hba.conf` rules, or `REVOKE CONNECT ON DATABASE other FROM
+PUBLIC` and grant it only to the roles that need it.
+
 By default you can't log in as `postgres` (or `root`, `pgsql`, `administrator`)
 or with an empty password. Create a normal login role for yourself, or set
 `PPA_EXTRA_LOGIN_SECURITY=false` if you really want the old behaviour.
@@ -120,8 +126,9 @@ or with an empty password. Create a normal login role for yourself, or set
 
 | Variable | Default | |
 |---|---|---|
-| `PPA_SERVERS` | `localhost` | Servers shown on the login page, separated by commas or spaces. Each one is `host`, `host:port` or `Name=host:port`, optionally followed by `/db1+db2` for a login per database (see above). IPv6 goes in brackets: `[::1]:5432`. Names can't contain spaces. |
-| `PPA_SSLMODE` | `allow` | `disable`, `allow`, `prefer`, `require`. Same for all servers. |
+| `PPA_SERVERS` | `localhost` | Servers shown on the login page, separated by commas or spaces. Each one is `host`, `host:port` or `Name=host:port`, optionally followed by `/db1+db2` for a login per database (see above) or `?sslmode=require` to set the sslmode of just that server. IPv6 goes in brackets: `[::1]:5432`. Names can't contain spaces. |
+| `PPA_SSLMODE` | `prefer` | `disable`, `allow`, `prefer`, `require`, `verify-ca` or `verify-full`. Applies to every server that has no `?sslmode=` of its own. Use `verify-full` for anything that crosses a network you don't control. |
+| `PPA_SSLROOTCERT` | | Path (inside the container) of the CA certificate file used by `verify-ca` and `verify-full`. Mount it into the container. |
 | `PPA_DEFAULTDB` | `postgres` | Database to connect to before you pick one. |
 | `PPA_EXTRA_LOGIN_SECURITY` | `true` | Block superuser names and empty passwords on the login page. |
 | `PPA_OWNED_ONLY` | `false` | Only list databases the user owns. This only hides them in the list. |
@@ -144,10 +151,43 @@ or with an empty password. Create a normal login role for yourself, or set
 | `PGCONNECT_TIMEOUT` | `10` | Seconds to wait for a server to accept a connection. |
 | `PHP_SESSION_COOKIE_SECURE` | `0` | Set to `1` when the site is served over HTTPS. |
 
+Upgrading: sslmode values are checked now. Anything other than `disable`,
+`allow`, `prefer`, `require`, `verify-ca`, `verify-full` or `unspecified`
+(`legacy`, for one) fails at login ("The SSL settings of the server and of
+phpPgAdmin don't match."; the container log says "Invalid sslmode"), so fix any
+`?sslmode=` in `PPA_SERVERS` and `PPA_SSLMODE` before you update.
+
+Upgrading: the sslmode now really reaches the database driver (before, it
+was ignored and libpq's own default, `prefer`, applied). The default is
+therefore `prefer`, and the server ids change from `...:allow` to `...:prefer`
+for installs that use the default, so bookmarked `server=` links need
+updating. Set `PPA_SSLMODE=allow` to keep the old ids.
+
 If you need something the variables can't do (server groups, a different
 sslmode per server, per-user themes), copy `conf/config.inc.php-dist`, edit it
 and mount it over `/var/www/html/conf/config.inc.php`. The variables are ignored
 then.
+
+### Security
+
+Every form submission (POST) carries a secret token (`ppa_csrf`, or the
+`X-PPA-CSRF` header for scripts) tied to your session, and destructive actions
+need a POST. A POST without the token is answered with HTTP 403, so another
+site can't make your browser drop a table. A few maintenance actions (sequence
+nextval/setval/reset, trigger enable/disable, vacuum/analyze) still run from
+links and rely on the SameSite cookie. The session cookie is `SameSite=Strict`, which also keeps
+it from being sent along with requests started by other sites. Links from
+another site open the app, but you'll land on the login page again.
+
+The login page says why a login failed in plain words. The server's own
+message (with host and port) goes to the container log, not to the page, and
+the start page doesn't show the PHP version.
+
+The optional Report plugin keeps reports in a table everyone can read. Only
+the user who created a report can change or delete it (row level security).
+Running someone else's report opens its SQL in the SQL editor so you can read
+it and press Execute. If you installed the plugin before, see the upgrade note
+at the end of `plugins/Report/sql/reports-pgsql.sql`.
 
 ### About the image
 

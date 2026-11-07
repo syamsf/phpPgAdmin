@@ -116,6 +116,7 @@
 
 			$func_full = $fndata->fields['proname'] . "(". $fndata->fields['proarguments'] .")";
 			echo "<form action=\"functions.php\" method=\"post\">\n";
+			echo $misc->csrfField();
 			echo "<table style=\"width: 90%\">\n";
 			echo "<tr>\n";
 			echo "<th class=\"data required\">{$lang['strschema']}</th>\n";
@@ -525,7 +526,9 @@
 
 		// Create string for return type list
 		$szTypes = "";
+		$arrayTypeNames = array();
 		while (!$types->EOF) {
+			$arrayTypeNames[] = $types->fields['typname'];
 			$szSelected = "";
 			if($types->fields['typname'] == $_POST['formReturns']) {
 				$szSelected = " selected=\"selected\"";
@@ -620,8 +623,8 @@
 		echo "<script src=\"functions.js\" type=\"text/javascript\"></script>
 		<script type=\"text/javascript\">
 			//<![CDATA[
-			var g_types_select = '<select name=\"formArgType[]\">{$szTypes}</select>{$szArgReturns}';
-			var g_modes_select = '{$szModes}';
+			var g_types = ", Misc::jsValue($arrayTypeNames), ";
+			var g_modes = ", Misc::jsValue($arrayModes), ";
 			var g_name = '';
 			var g_lang_strargremove = '", htmlspecialchars($lang["strargremove"], ENT_QUOTES) ,"';
 			var g_lang_strargnoargs = '", htmlspecialchars($lang["strargnoargs"], ENT_QUOTES) ,"';
@@ -802,7 +805,7 @@
 				$bArgIsArray = "true";
 			}
 			$arrayProperArgs[] = array($szMode,$szArgName,$szArgType,$bArgIsArray);
-			$szReturn .= "<script type=\"text/javascript\">RebuildArgTR('{$szMode}','{$szArgName}','{$szArgType}',new Boolean({$bArgIsArray}));</script>";
+			$szReturn .= "<script type=\"text/javascript\">RebuildArgTR(". Misc::jsValue($szMode) .",". Misc::jsValue($szArgName) .",". Misc::jsValue($szArgType) .",new Boolean({$bArgIsArray}));</script>";
 			$nC++;
 		}
 		return $szReturn;
@@ -818,12 +821,12 @@
 		$szTypes = '';
 
 		while (!$arrayTypes->EOF) {
-			$arrayPTypes[] = "'". $arrayTypes->fields['typname'] ."'";
+			$arrayPTypes[] = Misc::jsValue($arrayTypes->fields['typname']);
 			$arrayTypes->moveNext();
 		}
 
 		foreach($arrayModes as $pV) {
-			$arrayPModes[] = "'{$pV}'";
+			$arrayPModes[] = Misc::jsValue($pV);
 		}
 
 		$szTypes = 'g_main_types = new Array('. implode(',', $arrayPTypes) .');';
@@ -848,7 +851,7 @@
 			'function' => array(
 				'title' => $lang['strfunction'],
 				'field' => field('proproto'),
-				'url'   => "redirect.php?subject=function&amp;action=properties&amp;{$misc->href}&amp;",
+				'url'   => "redirect.php?subject=function&action=properties&{$misc->hrefRaw}&",
 				'vars'  => array('function' => 'proproto', 'function_oid' => 'prooid'),
 			),
 			'returns' => array(

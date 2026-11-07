@@ -65,7 +65,7 @@
 					echo "<td style=\"white-space:nowrap;\">", $misc->printVal($attrs->fields['attname']), "</td>";
 					echo "<td style=\"white-space:nowrap;\">", $misc->printVal($data->formatType($attrs->fields['type'], $attrs->fields['atttypmod'])), "</td>";
 					echo "<td style=\"white-space:nowrap;\">";
-					echo "<select name=\"ops[{$attrs->fields['attname']}]\">\n";
+					echo "<select name=\"ops[", htmlspecialchars($attrs->fields['attname']), "]\">\n";
 					foreach (array_keys($data->selectOps) as $v) {
 						echo "<option value=\"", htmlspecialchars($v), "\"", ($v == $_REQUEST['ops'][$attrs->fields['attname']]) ? ' selected="selected"' : '', 
 						">", htmlspecialchars($v), "</option>\n";
@@ -577,7 +577,7 @@
 			'view' => array(
 				'title'	=> $lang['strview'],
 				'field'	=> field('relname'),
-				'url' => "redirect.php?subject=view&amp;{$misc->href}&amp;",
+				'url' => "redirect.php?subject=view&{$misc->hrefRaw}&",
 				'vars'  => array('view' => 'relname'),
 			),
 			'owner' => array(

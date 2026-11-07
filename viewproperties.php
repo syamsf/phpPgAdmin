@@ -413,7 +413,7 @@
 			'column' => array(
 				'title' => $lang['strcolumn'],
 				'field' => field('attname'),
-				'url'   => "colproperties.php?subject=column&amp;{$misc->href}&amp;view=".urlencode($_REQUEST['view'])."&amp;",
+				'url'   => "colproperties.php?subject=column&{$misc->hrefRaw}&view=".urlencode($_REQUEST['view'])."&",
 				'vars'  => array('column' => 'attname'),
 			),
 			'type' => array(

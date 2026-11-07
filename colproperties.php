@@ -36,6 +36,7 @@
 
 				echo "<script src=\"tables.js\" type=\"text/javascript\"></script>";
 				echo "<form action=\"colproperties.php\" method=\"post\">\n";
+				echo $misc->csrfField();
 
 				// Output table header
 				echo "<table>\n";

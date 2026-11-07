@@ -32,6 +32,21 @@
 		}
 
 		/**
+		 * Whether row level security is on for the reports table. Without it
+		 * anyone may change anyone's report, so a failed lookup counts as off.
+		 * @return bool
+		 */
+		function rowSecurityEnabled() {
+			$table = $this->driver->escapeIdentifier($this->conf['reports_schema']) . '.'
+				. $this->driver->escapeIdentifier($this->conf['reports_table']);
+			$this->driver->clean($table);
+			$rs = $this->driver->selectSet("SELECT relrowsecurity FROM pg_catalog.pg_class WHERE oid = '{$table}'::regclass");
+			if (!is_object($rs) || $rs->recordCount() != 1) return false;
+			$v = $rs->fields['relrowsecurity'];
+			return $v === true || $v === 't' || $v === 'true' || $v === 1 || $v === '1';
+		}
+
+		/**
 		 * Finds all reports
 		 * @return \ADORecordSet|int A recordset, or an error status on failure
 		 */
