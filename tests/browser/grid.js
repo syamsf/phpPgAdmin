@@ -164,12 +164,13 @@ function ok(cond, msg) {
 
 	// Query box
 	const qbox = await page.evaluate(() => {
-		const ta = document.querySelector('textarea.sql-query');
-		const label = document.querySelector(`label[for="${ta.id}"]`);
-		const btn = ta.form.querySelector('input[type=submit]');
-		return { label: label && label.textContent, btn: btn.value, width: ta.getAttribute('width'), resizable: ta.getAttribute('resizable') };
+		const form = document.querySelector('form.sql-query-form');
+		const ta = form.querySelector('textarea.sql-editor');
+		const label = form.querySelector('.sql-query-label');
+		const btn = form.querySelector('input[type=submit]');
+		return { label: label && label.textContent, btn: btn.value, editor: !!form.querySelector('.CodeMirror') };
 	});
-	ok(qbox.label === 'SQL query' && qbox.btn === 'Execute' && qbox.width === null && qbox.resizable === null, 'query box: ' + JSON.stringify(qbox));
+	ok(qbox.label === 'SQL query' && qbox.btn === 'Execute' && qbox.editor, 'query box is the SQL editor: ' + JSON.stringify(qbox));
 
 	// --- Dark theme
 	await page.goto(tbl('oddities', { theme: 'dark' }));
@@ -220,7 +221,7 @@ function ok(cond, msg) {
 	ok(firstA === '75', 'tab A sorted desc, still page 2: ' + firstA);
 	await nav(tabB, () => tabB.click('nav.pagination a[rel="next"]'));
 	ok((await tabB.$eval('table.data-grid tbody tr td:nth-child(1)', (e) => e.textContent)) === '1050', 'tab B page 3 still its own');
-	ok(await tabA.$eval('textarea.sql-query', (e) => e.value) === 'SELECT id, val FROM public.plain ORDER BY id', 'tab A query box shows tab A query');
+	ok(await tabA.$eval('#sql-editor-form textarea.sql-editor', (e) => e.value) === 'SELECT id, val FROM public.plain ORDER BY id', 'tab A query box shows tab A query');
 	ok(!(await tabB.$('nav.pagination a.pagenav[href*="page=5"]')) || true, 'unknown total pagination');
 	const navText = await tabB.$eval('nav.pagination', (e) => e.textContent.replace(/\s+/g, ' ').trim());
 	ok(!navText.includes('Last'), 'no Last for unknown total: ' + navText);

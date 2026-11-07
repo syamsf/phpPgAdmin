@@ -255,6 +255,8 @@ def check_data_grid(fetch, check, failures, base, server):
             continue
         status, body = fetch(url)
         check(url, status, body)
+        # The recent queries menu lists the other query too: not a result row
+        body = re.sub(r'data-history="[^"]*"', '', body)
         if expect not in body or reject in body or "Rows 26–50" not in html.unescape(body):
             failures.append("%s -> page 2 shows the wrong query's rows" % url)
     if page2_a:

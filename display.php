@@ -16,6 +16,7 @@
 
 	// Include application functions
 	include_once('./libraries/lib.inc.php');
+	include_once('./classes/SqlEditor.php');
 
 	global $conf, $lang;
 
@@ -141,7 +142,7 @@
 
 				// Output table header
 				echo "<tr><th class=\"data\">{$lang['strcolumn']}</th><th class=\"data\">{$lang['strtype']}</th>";
-				echo "<th class=\"data\">{$lang['strformat']}</th>\n";
+				echo "<th class=\"data\"><span title=\"{$lang['strinputashelp']}\">{$lang['strinputas']}</span></th>\n";
 				echo "<th class=\"data\">{$lang['strnull']}</th><th class=\"data\">{$lang['strvalue']}</th></tr>";
 
 				$i = 0;
@@ -163,8 +164,8 @@
 					$elements++;
 					echo "<td style=\"white-space:nowrap;\">\n";
 					echo "<select name=\"format[", htmlspecialchars($attrs->fields['attname']), "]\">\n";
-					echo "<option value=\"VALUE\"", (($_REQUEST['format'][$attrs->fields['attname']] ?? null) == 'VALUE') ? ' selected="selected"' : '', ">{$lang['strvalue']}</option>\n";
-					echo "<option value=\"EXPRESSION\"", (($_REQUEST['format'][$attrs->fields['attname']] ?? null) == 'EXPRESSION') ? ' selected="selected"' : '', ">{$lang['strexpression']}</option>\n";
+					echo "<option value=\"VALUE\"", (($_REQUEST['format'][$attrs->fields['attname']] ?? null) == 'VALUE') ? ' selected="selected"' : '', ">{$lang['strasvalue']}</option>\n";
+					echo "<option value=\"EXPRESSION\"", (($_REQUEST['format'][$attrs->fields['attname']] ?? null) == 'EXPRESSION') ? ' selected="selected"' : '', ">{$lang['strasexpression']}</option>\n";
 					echo "</select>\n</td>\n";
 					$elements++;
 					echo "<td style=\"white-space:nowrap;\">";
@@ -241,9 +242,9 @@
 
 			if($fksprops !== false) {
 				if ($conf['autocomplete'] != 'default off')
-					echo "<input type=\"checkbox\" id=\"no_ac\" value=\"1\" checked=\"checked\" /><label for=\"no_ac\">{$lang['strac']}</label>\n";
+					echo "<input type=\"checkbox\" id=\"no_ac\" value=\"1\" checked=\"checked\" /><label for=\"no_ac\" title=\"{$lang['strachelp']}\">{$lang['strfksuggest']}</label>\n";
 				else
-					echo "<input type=\"checkbox\" id=\"no_ac\" value=\"0\" /><label for=\"no_ac\">{$lang['strac']}</label>\n";
+					echo "<input type=\"checkbox\" id=\"no_ac\" value=\"0\" /><label for=\"no_ac\" title=\"{$lang['strachelp']}\">{$lang['strfksuggest']}</label>\n";
 			}
 
 			echo "</p>\n";
@@ -424,12 +425,20 @@
 				echo "<th class=\"data\">", $misc->printVal($column['name']), "</th>\n";
 			}
 			else {
+				global $ppa_default_sort;
 				$sorted = ($_REQUEST['sortkey'] == ($j + 1));
+				$sortdir = $_REQUEST['sortdir'];
+				// A table without a chosen order shows its newest rows first
+				// (see browseQuery): mark that column as sorted descending.
+				if ($_REQUEST['sortkey'] === '' && $ppa_default_sort !== null && $column['name'] === $ppa_default_sort) {
+					$sorted = true;
+					$sortdir = 'desc';
+				}
 				$args['page'] = $_REQUEST['page'];
 				$args['sortkey'] = $j + 1;
 				// Sort direction opposite to current direction, unless it's currently ''
 				$args['sortdir'] = (
-					$_REQUEST['sortdir'] == 'asc'
+					$sortdir == 'asc'
 					and $sorted
 				) ? 'desc' : 'asc';
 
@@ -437,12 +446,12 @@
 
 				$ariaSort = '';
 				if ($sorted)
-					$ariaSort = ($_REQUEST['sortdir'] == 'asc') ? ' aria-sort="ascending"' : ' aria-sort="descending"';
+					$ariaSort = ($sortdir == 'asc') ? ' aria-sort="ascending"' : ' aria-sort="descending"';
 
 				echo "<th class=\"data\" scope=\"col\"{$ariaSort}><a href=\"display.php?{$sortLink}\">"
 					, $misc->printVal($column['name']);
 				if ($sorted) {
-					if($_REQUEST['sortdir'] == 'asc')
+					if($sortdir == 'asc')
 						echo '<img src="'. $misc->icon('RaiseArgument') .'" alt="asc">';
 					else	echo '<img src="'. $misc->icon('LowerArgument') .'" alt="desc">';
 				}
@@ -592,7 +601,9 @@
 		}
 
 		$misc->printTrail(isset($subject) ? $subject : 'database');
-		$misc->printTabs($subject,'browse');
+		// Query results (no subject) keep the database tabs, on SQL.
+		if ($subject === '' || $subject === 'database') $misc->printTabs('database', 'sql');
+		else $misc->printTabs($subject, 'browse');
 
 		/* This code is used when browsing FK in pure-xHTML (without js) */
 		$fkey_query = null;
@@ -732,29 +743,48 @@
 		/* The query form must carry the current context (server, database, schema,
 		 * ...) in its own fields: display.php can be reached through a POST with an
 		 * empty query string, eg. right after saving an edited row. */
-		echo "<form method=\"post\" action=\"display.php\" class=\"sql-query-form\">\n";
-		printHiddenFields($_gets, array('query', 'qt'));
-		echo "<input type=\"hidden\" name=\"page\" value=\"", htmlspecialchars($_REQUEST['page']), "\" />\n";
-		/* Show the query that was actually executed. */
-		if ($query_sql !== null) {
-			$query = $query_sql;
+		if ($type == 'QUERY') {
+			/* Results of the SQL editor: the same editor as above plain
+			 * results (sql.php), with the data grid box ticked. */
+			SqlEditor::printResultsForm($query_sql, array(
+				'search_path' => isset($_REQUEST['search_path']) ? $_REQUEST['search_path'] : implode(',', $data->getSearchPath()),
+				'paginate' => true,
+			));
 		} else {
-			$query = "SELECT * FROM ".$data->escapeIdentifier($_REQUEST['schema'] ?? '');
-			if (($_REQUEST['subject'] ?? '') == 'view') {
-				$query = "{$query}.".$data->escapeIdentifier($_REQUEST['view'] ?? '').";";
+			echo "<form method=\"post\" action=\"display.php\" class=\"sql-query-form\">\n";
+			printHiddenFields($_gets, array('query', 'qt'));
+			echo "<input type=\"hidden\" name=\"page\" value=\"", htmlspecialchars($_REQUEST['page']), "\" />\n";
+			/* Show the query that was actually executed. */
+			if ($query_sql !== null) {
+				$query = $query_sql;
 			} else {
-				$query = "{$query}.".$data->escapeIdentifier($_REQUEST['table'] ?? '').";";
+				$query = "SELECT * FROM ".$data->escapeIdentifier($_REQUEST['schema'] ?? '');
+				if (($_REQUEST['subject'] ?? '') == 'view') {
+					$query = "{$query}.".$data->escapeIdentifier($_REQUEST['view'] ?? '').";";
+				} else {
+					$query = "{$query}.".$data->escapeIdentifier($_REQUEST['table'] ?? '').";";
+				}
 			}
+			echo "<label class=\"sql-query-label\">", htmlspecialchars($lang['strsqlquery']), "</label>\n";
+			SqlEditor::printTextarea($query, array('rows' => 3));
+			echo "<div><input type=\"submit\" value=\"", htmlspecialchars($lang['strexecute']), "\" /></div>\n";
+			echo "</form>\n";
 		}
-		echo "<label for=\"ppa-sql-query\">", htmlspecialchars($lang['strsqlquery']), "</label><br />\n";
-		echo "<textarea id=\"ppa-sql-query\" name=\"query\" rows=\"5\" cols=\"100\" class=\"sql-query\">";
-		echo htmlspecialchars($query);
-		echo "</textarea>\n";
-		echo "<div><input type=\"submit\" value=\"", htmlspecialchars($lang['strexecute']), "\" /></div>\n";
-		echo "</form>\n";
 
 		if (is_object($rs) && $rs->FieldCount() > 0) {
 			$rows = $info['rows'];
+
+			// The order a table is shown in when no column was clicked:
+			// its primary key, else its first column, descending.
+			global $ppa_default_sort;
+			$ppa_default_sort = null;
+			if ($type == 'TABLE' && $_REQUEST['sortkey'] === '') {
+				if (isset($fkey_information['pkey'])) $ppa_default_sort = $fkey_information['pkey'];
+				else {
+					$grid_columns = getGridColumns($rs, isset($object));
+					if ($grid_columns) $ppa_default_sort = $grid_columns[0]['name'];
+				}
+			}
 
 			/* "Rows 31-60 of 1,234", "of about 1.2M", or just "Rows 31-60" when
 			 * the total is unknown */
@@ -801,7 +831,15 @@
 					htmlspecialchars($lang['strclearfilters']), "</a>\n";
 			}
 			echo "</form>\n";
-			if ($rows > 0) echo "<p class=\"grid-hint\">", htmlspecialchars($lang['strcopycell']), "</p>\n";
+			if ($rows > 0) {
+				echo "<p class=\"grid-hint\">";
+				if ($ppa_default_sort !== null)
+					echo htmlspecialchars(sprintf($lang['strdefaultsort'], $ppa_default_sort)), ' ';
+				echo htmlspecialchars($lang['strcopycell']), "</p>\n";
+				// Edit and Delete need a key to find the row again
+				if (isset($object) && $subject == 'table' && count($key) == 0)
+					echo "<p class=\"grid-hint grid-no-key\">", htmlspecialchars($lang['strnorowkey']), "</p>\n";
+			}
 			echo "</div>\n";
 
 			// Show page navigation
@@ -995,20 +1033,7 @@
 			);
 		}
 
-		// Edit SQL link
-		if ($type == 'QUERY')
-			$navlinks['edit'] = array (
-				'attr'=> array (
-					'href' => array (
-						'url' => 'database.php',
-						'urlvars' => array_merge($fields, array (
-							'action' => 'sql',
-							'paginate' => 'on',
-						))
-					)
-				),
-				'content' => $lang['streditsql']
-			);
+		// No "Edit SQL" link: the editor is at the top of the page.
 
 		// Expand/Collapse
 		if ($_REQUEST['strings'] == 'expanded')
@@ -1119,7 +1144,8 @@
 		doBrowseFK();
 	}
 
-	$scripts = "<script src=\"js/display.js\" type=\"text/javascript\"></script>";
+	$scripts = SqlEditor::head();
+	$scripts .= "<script src=\"js/display.js\" type=\"text/javascript\"></script>";
 	$scripts .= "<script src=\"js/grid.js\" type=\"text/javascript\"></script>";
 
 	$scripts .= "<script type=\"text/javascript\">\n";

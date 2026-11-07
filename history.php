@@ -8,6 +8,7 @@
 
 	// Include application functions
 	include_once('./libraries/lib.inc.php');
+	include_once('./classes/SqlEditor.php');
 
 	$action = (isset($_REQUEST['action'])) ? $_REQUEST['action'] : '';
 
@@ -50,11 +51,9 @@
 				'query' => array(
 					'title' => $lang['strsql'],
 					'field' => field('query'),
-				),
-				'paginate' => array(
-					'title' => $lang['strpaginate'],
-					'field' => field('paginate'),
-					'type' => 'yesno',
+					'type' => 'pre',
+					'params' => array('clip' => true, 'cliplen' => 300),
+					'class' => 'history-query',
 				),
 				'actions' => array(
 					'title' => $lang['stractions'],
@@ -62,8 +61,21 @@
 			);
 
 			$actions = array(
+				'edit' => array(
+					'content' => $lang['stropenineditor'],
+					'attr'=> array (
+						'href' => array (
+							'url' => 'database.php',
+							'urlvars' => array (
+								'subject' => 'database',
+								'action' => 'sql',
+								'queryid' => field('queryid'),
+							)
+						)
+					)
+				),
 				'run' => array(
-					'content' => $lang['strexecute'],
+					'content' => $lang['strrunagain'],
 					'attr'=> array (
 						'href' => array (
 							'url' => 'sql.php',
@@ -71,7 +83,7 @@
 								'subject' => 'history',
 								'nohistory' => 't',
 								'queryid' => field('queryid'),
-								'paginate' => field('paginate')
+								'paginate' => SqlEditor::paginateDefault() ? 'on' : 'f',
 							)
 						)
 					)

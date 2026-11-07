@@ -19,6 +19,48 @@ if (! defined('ADODB_ERROR_HANDLER'))
  * @param $p1		$fn specific parameter - see below
  * @param $P2		$fn specific parameter - see below
  */
+/**
+ * The server's message for a failed connection, without PHP's prefix,
+ * or '' when there is none.
+ */
+function loginErrorDetail($errmsg) {
+	$last = error_get_last();
+	$text = '';
+	if ($last && preg_match('/pg_p?connect\(\)/', $last['message'])) {
+		$text = $last['message'];
+	} elseif (is_string($errmsg) && $errmsg !== 'Database connection failed') {
+		$text = $errmsg;
+	}
+	// PHP's message may come HTML-escaped (html_errors); it is printed escaped.
+	$text = html_entity_decode(strip_tags($text), ENT_QUOTES, 'UTF-8');
+	$text = preg_replace('/^.*?Unable to connect to PostgreSQL server:\s*/s', '', $text);
+	$text = preg_replace('/^pg_p?connect\(\):\s*/', '', $text);
+	return trim($text);
+}
+
+/**
+ * A plain-language reason for a failed login, picked from the server's
+ * message, or '' when it doesn't match a case we know.
+ */
+function loginErrorReason($detail) {
+	global $lang;
+	$cases = array(
+		'/password authentication failed|authentication failed for user|no password supplied|password is required/i' => 'strloginbadpassword',
+		'/no pg_hba\.conf entry|pg_hba\.conf rejects/i' => 'strloginhba',
+		'/role "[^"]*" does not exist/i' => 'strloginnorole',
+		'/database "[^"]*" does not exist/i' => 'strloginnodb',
+		'/could not translate host name|Name or service not known|nodename nor servname/i' => 'strloginnohost',
+		'/Connection refused|timeout expired|timed out|No route to host|Network is unreachable|could not connect to server/i' => 'strloginunreachable',
+		'/SSL|certificate/i' => 'strloginssl',
+		'/too many (clients|connections)|remaining connection slots/i' => 'strlogintoomany',
+		'/not permitted to log in/i' => 'strloginnologin',
+	);
+	foreach ($cases as $re => $key) {
+		if (preg_match($re, $detail) && isset($lang[$key])) return $lang[$key];
+	}
+	return '';
+}
+
 function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
 {
 	global $lang, $conf;
@@ -45,6 +87,10 @@ function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
 		unset($_SESSION['sharedPassword']);
 		unset($_SESSION['webdbLogin'][$_REQUEST['server']]);
 		$msg = $lang['strloginfailed'];
+		// ADOdb only keeps "Database connection failed"; the server's own
+		// reason is in the warning pg_connect() raised just before.
+		$loginErrorDetail = loginErrorDetail($errmsg);
+		$loginErrorReason = loginErrorReason($loginErrorDetail);
 		include('./login.php');
 		exit;
 		break;

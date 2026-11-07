@@ -317,32 +317,32 @@
 		echo "<input type=\"radio\" id=\"what1\" name=\"what\" value=\"dataonly\" checked=\"checked\" /><label for=\"what1\">{$lang['strdataonly']}</label></th>\n";
 		echo "<td>{$lang['strformat']}</td>\n";
 		echo "<td><select name=\"d_format\">\n";
-		echo "<option value=\"copy\">COPY</option>\n";
-		echo "<option value=\"sql\">SQL</option>\n";
+		echo "<option value=\"copy\">{$lang['strexportcopy']}</option>\n";
+		echo "<option value=\"sql\">{$lang['strexportsql']}</option>\n";
 		echo "</select>\n</td>\n</tr>\n";
 		if ($data->hasServerOids()) {
 			echo "<tr><td><label for=\"d_oids\">{$lang['stroids']}</label></td><td><input type=\"checkbox\" id=\"d_oids\" name=\"d_oids\" /></td>\n</tr>\n";
 		}
 		// Structure only
 		echo "<tr><th class=\"data left\"><input type=\"radio\" id=\"what2\" name=\"what\" value=\"structureonly\" /><label for=\"what2\">{$lang['strstructureonly']}</label></th>\n";
-		echo "<td><label for=\"s_clean\">{$lang['strdrop']}</label></td><td><input type=\"checkbox\" id=\"s_clean\" name=\"s_clean\" /></td>\n</tr>\n";
+		echo "<td><label for=\"s_clean\">{$lang['strexportdrop']}</label></td><td><input type=\"checkbox\" id=\"s_clean\" name=\"s_clean\" /></td>\n</tr>\n";
 		// Structure and data
 		echo "<tr><th class=\"data left\" rowspan=\"". ($data->hasServerOids() ? 3 : 2) ."\">";
 		echo "<input type=\"radio\" id=\"what3\" name=\"what\" value=\"structureanddata\" /><label for=\"what3\">{$lang['strstructureanddata']}</label></th>\n";
 		echo "<td>{$lang['strformat']}</td>\n";
 		echo "<td><select name=\"sd_format\">\n";
-		echo "<option value=\"copy\">COPY</option>\n";
-		echo "<option value=\"sql\">SQL</option>\n";
+		echo "<option value=\"copy\">{$lang['strexportcopy']}</option>\n";
+		echo "<option value=\"sql\">{$lang['strexportsql']}</option>\n";
 		echo "</select>\n</td>\n</tr>\n";
-		echo "<tr><td><label for=\"sd_clean\">{$lang['strdrop']}</label></td><td><input type=\"checkbox\" id=\"sd_clean\" name=\"sd_clean\" /></td>\n</tr>\n";
+		echo "<tr><td><label for=\"sd_clean\">{$lang['strexportdrop']}</label></td><td><input type=\"checkbox\" id=\"sd_clean\" name=\"sd_clean\" /></td>\n</tr>\n";
 		if ($data->hasServerOids()) {
 			echo "<tr><td><label for=\"sd_oids\">{$lang['stroids']}</label></td><td><input type=\"checkbox\" id=\"sd_oids\" name=\"sd_oids\" /></td>\n</tr>\n";
 		}
 		echo "</table>\n";
 		
 		echo "<h3>{$lang['stroptions']}</h3>\n";
-		echo "<p><input type=\"radio\" id=\"output1\" name=\"output\" value=\"show\" checked=\"checked\" /><label for=\"output1\">{$lang['strshow']}</label>\n";
-		echo "<br/><input type=\"radio\" id=\"output2\" name=\"output\" value=\"download\" /><label for=\"output2\">{$lang['strdownload']}</label>\n";
+		echo "<p><input type=\"radio\" id=\"output1\" name=\"output\" value=\"show\" /><label for=\"output1\">{$lang['strshow']}</label>\n";
+		echo "<br/><input type=\"radio\" id=\"output2\" name=\"output\" value=\"download\" checked=\"checked\" /><label for=\"output2\">{$lang['strdownload']}</label>\n";
 		// MSIE cannot download gzip in SSL mode - it's just broken
 		if (!(strstr(($_SERVER['HTTP_USER_AGENT'] ?? ''), 'MSIE') && isset($_SERVER['HTTPS']))) {
 			echo "<br /><input type=\"radio\" id=\"output3\" name=\"output\" value=\"gzipped\" /><label for=\"output3\">{$lang['strdownloadgzipped']}</label>\n";
@@ -453,13 +453,14 @@
                 'title' => $lang['strblocked'],
                 'field' => field('waiting'),
             ),
-			'query' => array(
-				'title' => $lang['strsql'],
-				'field' => field('query'),
-			),
 			'start_time' => array(
 				'title' => $lang['strstarttime'],
 				'field' => field('query_start'),
+			),
+			'query' => array(
+				'title' => $lang['strsql'],
+				'field' => field('query'),
+				'class' => 'process-query',
 			),
 		);
 
@@ -581,7 +582,11 @@
 
 		if ((!isset($_SESSION['sqlquery'])) || isset($_REQUEST['new'])) {
 			$_SESSION['sqlquery'] = '';
-			$_REQUEST['paginate'] = 'on';
+		}
+		// "Open in editor" from the History page
+		if (isset($_REQUEST['queryid']) && is_string($_REQUEST['queryid'])
+				&& isset($_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']][$_REQUEST['queryid']]['query'])) {
+			$_SESSION['sqlquery'] = $_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']][$_REQUEST['queryid']]['query'];
 		}
 
 		$misc->printTrail('database');
@@ -589,9 +594,10 @@
 		echo "<p>{$lang['strentersql']}</p>\n";
 		echo "<form action=\"sql.php\" method=\"post\" enctype=\"multipart/form-data\" id=\"sql-editor-form\" class=\"sql-editor-form\">\n";
 		echo $misc->form;
+		SqlEditor::printSearchPath(implode(',', $data->getSearchPath()));
 		SqlEditor::printTextarea($_SESSION['sqlquery'], array('rows' => 16, 'autofocus' => true));
 		SqlEditor::printUpload();
-		SqlEditor::printPaginate(isset($_REQUEST['paginate']));
+		SqlEditor::printPaginate(isset($_REQUEST['paginate']) || SqlEditor::paginateDefault());
 		SqlEditor::printButtons();
 		echo "</form>\n";
 	}
@@ -644,8 +650,8 @@
 		$scripts .= "<script type=\"text/javascript\">\n";
 		$scripts .= "var Database = {\n";
 		$scripts .= "ajax_time_refresh: {$refreshTime},\n";
-		$scripts .= "str_start: {text:'{$lang['strstart']}',icon: '". $misc->icon('Execute') ."'},\n";
-		$scripts .= "str_stop: {text:'{$lang['strstop']}',icon: '". $misc->icon('Stop') ."'},\n";
+		$scripts .= "str_start: {text:'". addslashes($lang['strautorefreshstart']) ."',icon: '". $misc->icon('Execute') ."'},\n";
+		$scripts .= "str_stop: {text:'". addslashes($lang['strautorefreshstop']) ."',icon: '". $misc->icon('Stop') ."'},\n";
 		$scripts .= "load_icon: '". $misc->icon('Loading') ."',\n";
 		$scripts .= "server:'{$_REQUEST['server']}',\n";
 		$scripts .= "dbname:'{$_REQUEST['database']}',\n";

@@ -126,7 +126,7 @@
 
 		SqlEditor::printTextarea($_SESSION['sqlquery'], array('rows' => 12, 'autofocus' => true));
 		SqlEditor::printUpload();
-		SqlEditor::printPaginate(isset($_REQUEST['paginate']));
+		SqlEditor::printPaginate(isset($_REQUEST['paginate']) || SqlEditor::paginateDefault());
 		SqlEditor::printButtons();
 		echo "</form>\n";
 	}

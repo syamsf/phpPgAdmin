@@ -24,7 +24,19 @@
 
 	$misc->printTitle(sprintf($lang['strlogintitle'], $server_info['desc'] ?? ''));
 
-	if (isset($msg)) $misc->printMsg($msg);
+	if (isset($msg)) {
+		if (!empty($loginErrorReason) || !empty($loginErrorDetail)) {
+			// A failed connection: say why, and show the server's own words.
+			echo "<div class=\"message error login-error\" role=\"alert\"><p><strong>", htmlspecialchars($msg), "</strong>";
+			if (!empty($loginErrorReason)) echo " ", htmlspecialchars($loginErrorReason);
+			echo "</p>\n";
+			if (!empty($loginErrorDetail))
+				echo "<pre class=\"login-error-detail\">", htmlspecialchars($loginErrorDetail), "</pre>\n";
+			echo "</div>\n";
+		} else {
+			$misc->printMsg($msg);
+		}
+	}
 
 	$md5_server = md5($server);
 ?>

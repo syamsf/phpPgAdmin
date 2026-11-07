@@ -156,6 +156,9 @@
 	 * also sets $_SESSION['sqlquery'], which other pages still read. */
 	$_REQUEST['qt'] = $misc->storeQuery($_sqlquery);
 
+	// The editor's "data grid" box is remembered for the next time
+	SqlEditor::rememberPaginate();
+
 	// Pagination maybe set by a get link that has it as FALSE,
 	// if that's the case, unset the variable.
 
@@ -188,6 +191,7 @@
 	$misc->printHeader($lang['strqueryresults'], SqlEditor::head() . "<script src=\"js/grid.js\"></script>\n");
 	$misc->printBody();
 	$misc->printTrail('database');
+	if (isset($_REQUEST['database'])) $misc->printTabs('database', 'sql');
 	$misc->printTitle($lang['strqueryresults']);
 
 	// Set the schema search path
@@ -227,8 +231,10 @@
 		// $rs will only be an object if there is no error
 		if (is_object($rs)) {
 			// Request was run, saving it in history
+			// What was typed goes in the history, without the EXPLAIN the
+			// Explain buttons put in front of it.
 			if(!isset($_REQUEST['nohistory']))
-				$misc->saveScriptHistory($sql_query);
+				$misc->saveScriptHistory($sql_posted_query !== null ? $sql_posted_query : $sql_query);
 
 			// Now, depending on what happened do various things
 
@@ -275,21 +281,12 @@
 		$_reload_browser = true;
 
 	// The editor, filled with the query, to change and run it again
-	echo "<form action=\"sql.php\" method=\"post\" enctype=\"multipart/form-data\" id=\"sql-editor-form\" class=\"sql-editor-form\">\n";
-	echo $misc->form;
-	if (isset($_REQUEST['return']))
-		echo "<input type=\"hidden\" name=\"return\" value=\"", htmlspecialchars($_REQUEST['return']), "\" />\n";
-	echo "<p><label>";
-	$misc->printHelp($lang['strsearchpath'], 'pg.schema.search_path');
-	echo ": <input type=\"text\" name=\"search_path\" size=\"50\" value=\"", htmlspecialchars($sql_search_path), "\" /></label></p>\n";
-	SqlEditor::printTextarea($sql_editor_text, array(
-		'rows' => 6,
+	SqlEditor::printResultsForm($sql_editor_text, array(
+		'search_path' => $sql_search_path,
+		'paginate' => isset($_REQUEST['paginate']),
 		'error' => $sql_error !== null ? SqlEditor::errorPosition($sql_error) : null,
 		'selection' => isset($_POST['sqleditor_selection']) ? $_POST['sqleditor_selection'] : null,
 	));
-	SqlEditor::printPaginate(isset($_REQUEST['paginate']));
-	SqlEditor::printButtons(false);
-	echo "</form>\n";
 
 	// Outcome, then the results
 	if ($sql_error !== null) {
@@ -332,18 +329,7 @@
 		);
 	}
 
-	// Edit
-	$navlinks['alter'] = array (
-		'attr'=> array (
-			'href' => array (
-				'url' => 'database.php',
-				'urlvars' => array_merge($fields, array (
-					'action' => 'sql',
-				))
-			)
-		),
-		'content' => $lang['streditsql']
-	);
+	// No "Edit SQL" link: the editor is at the top of this page.
 
 	// Create view and download
 	if (isset($_SESSION['sqlquery']) && isset($rs) && is_object($rs) && $rs->recordCount() > 0) {

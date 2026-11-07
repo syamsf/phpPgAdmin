@@ -25,7 +25,7 @@
 		}
 
 		if (!isset($_REQUEST['name'])) $_REQUEST['name'] = '';
-		if (!isset($_REQUEST['fields'])) $_REQUEST['fields'] = '';
+		if (!isset($_REQUEST['fields'])) $_REQUEST['fields'] = '3';
 		if (!isset($_REQUEST['tblcomment'])) $_REQUEST['tblcomment'] = '';
 		if (!isset($_REQUEST['spcname'])) $_REQUEST['spcname'] = '';
 
@@ -109,7 +109,7 @@
 				echo "<form action=\"tables.php\" method=\"post\">\n";
 
 				// Output table header
-				echo "<table>\n";
+				echo "<div class=\"ppa-scroll-x\"><table id=\"create-columns\">\n";
 				echo "\t<tr><th colspan=\"2\" class=\"data required\">{$lang['strcolumn']}</th><th colspan=\"2\" class=\"data required\">{$lang['strtype']}</th>";
 				echo "<th class=\"data\">{$lang['strlength']}</th><th class=\"data\">{$lang['strnotnull']}</th>";
 				echo "<th class=\"data\">{$lang['struniquekey']}</th><th class=\"data\">{$lang['strprimarykey']}</th>";
@@ -117,6 +117,8 @@
 
 				for ($i = 0; $i < $_REQUEST['fields']; $i++) {
 					if (!isset($_REQUEST['field'][$i])) $_REQUEST['field'][$i] = '';
+					// Plain text unless chosen; SERIAL (first in the list) is rarely meant.
+					if (!isset($_REQUEST['type'][$i])) $_REQUEST['type'][$i] = 'text';
 					if (!isset($_REQUEST['length'][$i])) $_REQUEST['length'][$i] = '';
 					if (!isset($_REQUEST['default'][$i])) $_REQUEST['default'][$i] = '';
 					if (!isset($_REQUEST['colcomment'][$i])) $_REQUEST['colcomment'][$i] = '';
@@ -167,17 +169,20 @@
 						." /></td>\n";
 					echo "\t\t<td><input name=\"default[{$i}]\" size=\"20\" value=\"",
 						htmlspecialchars($_REQUEST['default'][$i]), "\" /></td>\n";
-					echo "\t\t<td><input name=\"colcomment[{$i}]\" size=\"40\" value=\"",
+					echo "\t\t<td><input name=\"colcomment[{$i}]\" size=\"24\" value=\"",
 						htmlspecialchars($_REQUEST['colcomment'][$i]), "\" />
 						<script type=\"text/javascript\">checkLengths(document.getElementById('types{$i}').value,{$i});</script>
 						</td>\n\t</tr>\n";
 				}
-				echo "</table>\n";
+				echo "</table></div>\n";
+				// More rows can be added here; empty rows are left out.
+				echo "<p class=\"create-columns-tools\"><button type=\"button\" id=\"create-add-column\">+ {$lang['straddcolumn']}</button>",
+					" <span class=\"hint\">{$lang['strcreateemptyrows']}</span></p>\n";
 				echo "<p><input type=\"hidden\" name=\"action\" value=\"create\" />\n";
 				echo "<input type=\"hidden\" name=\"stage\" value=\"3\" />\n";
 				echo $misc->form;
 				echo "<input type=\"hidden\" name=\"name\" value=\"", htmlspecialchars($_REQUEST['name']), "\" />\n";
-				echo "<input type=\"hidden\" name=\"fields\" value=\"", htmlspecialchars($_REQUEST['fields']), "\" />\n";
+				echo "<input type=\"hidden\" name=\"fields\" id=\"create-fields\" value=\"", htmlspecialchars($_REQUEST['fields']), "\" />\n";
 				if (isset($_REQUEST['withoutoids'])) {
 					echo "<input type=\"hidden\" name=\"withoutoids\" value=\"true\" />\n";
 				}
@@ -479,7 +484,7 @@
 
 				// Output table header
 				echo "<tr><th class=\"data\">{$lang['strcolumn']}</th><th class=\"data\">{$lang['strtype']}</th>";
-				echo "<th class=\"data\">{$lang['strformat']}</th>";
+				echo "<th class=\"data\"><span title=\"{$lang['strinputashelp']}\">{$lang['strinputas']}</span></th>";
 				echo "<th class=\"data\">{$lang['strnull']}</th><th class=\"data\">{$lang['strvalue']}</th></tr>";
 
 				$i = 0;
@@ -513,8 +518,8 @@
 						htmlspecialchars($attrs->fields['type']), "\" /></td>";
 					echo "<td style=\"white-space:nowrap;\">\n";
 					echo "<select name=\"format[{$attrs->fields['attnum']}]\">\n";
-					echo "<option value=\"VALUE\"", ($_REQUEST['format'][$attrs->fields['attnum']] == 'VALUE') ? ' selected="selected"' : '', ">{$lang['strvalue']}</option>\n";
-					echo "<option value=\"EXPRESSION\"", ($_REQUEST['format'][$attrs->fields['attnum']] == 'EXPRESSION') ? ' selected="selected"' : '', ">{$lang['strexpression']}</option>\n";
+					echo "<option value=\"VALUE\"", ($_REQUEST['format'][$attrs->fields['attnum']] == 'VALUE') ? ' selected="selected"' : '', ">{$lang['strasvalue']}</option>\n";
+					echo "<option value=\"EXPRESSION\"", ($_REQUEST['format'][$attrs->fields['attnum']] == 'EXPRESSION') ? ' selected="selected"' : '', ">{$lang['strasexpression']}</option>\n";
 					echo "</select>\n</td>\n";
 					echo "<td style=\"white-space:nowrap;\">";
 					// Output null box if the column allows nulls (doesn't look at CHECKs or ASSERTIONS)
@@ -556,9 +561,9 @@
 
 				if($fksprops !== false) {
 					if ($conf['autocomplete'] != 'default off')
-						echo "<input type=\"checkbox\" id=\"no_ac\" value=\"1\" checked=\"checked\" /><label for=\"no_ac\">{$lang['strac']}</label>\n";
+						echo "<input type=\"checkbox\" id=\"no_ac\" value=\"1\" checked=\"checked\" /><label for=\"no_ac\" title=\"{$lang['strachelp']}\">{$lang['strfksuggest']}</label>\n";
 					else
-						echo "<input type=\"checkbox\" id=\"no_ac\" value=\"0\" /><label for=\"no_ac\">{$lang['strac']}</label>\n";
+						echo "<input type=\"checkbox\" id=\"no_ac\" value=\"0\" /><label for=\"no_ac\" title=\"{$lang['strachelp']}\">{$lang['strfksuggest']}</label>\n";
 				}
 				echo "</p>\n";
 			}
@@ -768,7 +773,8 @@
 			'tuples' => array(
 				'title' => $lang['strestimatedrowcount'],
 				'field' => field('reltuples'),
-				'type'  => 'numeric'
+				'type'  => 'numeric',
+				'params'=> array('null' => '<span class="unknown" title="'. htmlspecialchars($lang['strrowsunknown']) .'">&mdash;</span>'),
 			),
 			'actions' => array(
 				'title' => $lang['stractions'],

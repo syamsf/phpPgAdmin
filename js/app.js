@@ -281,6 +281,9 @@
 
 		runScripts(headScripts(doc).concat(Array.prototype.slice.call(m.querySelectorAll('script')))).then(function () {
 			fire('ppa:load', { url: url });
+			// Page scripts (e.g. the SQL editor) can change the layout above
+			// the restored position: restore it again once they ran.
+			if (typeof opts.scroll === 'number') window.scrollTo(0, opts.scroll);
 		});
 	}
 
@@ -644,6 +647,80 @@
 	}
 
 	/* ---------------------------------------------------------------- */
+	/* "More actions" menus in lists (Misc::printRowActions)             */
+	/* ---------------------------------------------------------------- */
+
+	function closeMenus(except) {
+		document.querySelectorAll('details.ppa-menu[open]').forEach(function (d) {
+			if (d !== except) d.open = false;
+		});
+	}
+
+	function bodyBackground() {
+		var el = document.getElementById('ppa-main') || document.body;
+		for (; el; el = el.parentElement) {
+			var bg = getComputedStyle(el).backgroundColor;
+			if (bg && bg !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(bg)) return bg;
+		}
+		return '#fff';
+	}
+
+	// The list is position:fixed so tables that scroll sideways don't clip it.
+	function placeMenu(d) {
+		var list = d.querySelector('.ppa-menu-list');
+		var s = d.querySelector('summary');
+		if (!list || !s) return;
+		list.style.backgroundColor = bodyBackground();
+		var r = s.getBoundingClientRect();
+		list.style.left = '0px';
+		list.style.top = '0px';
+		var w = list.offsetWidth, h = list.offsetHeight;
+		var left = Math.min(r.left, window.innerWidth - w - 8);
+		var top = r.bottom + 2;
+		if (top + h > window.innerHeight - 8 && r.top - h - 2 > 8) top = r.top - h - 2;
+		list.style.left = Math.max(8, left) + 'px';
+		list.style.top = top + 'px';
+	}
+
+	document.addEventListener('toggle', function (e) {
+		var d = e.target;
+		if (!d.classList || !d.classList.contains('ppa-menu') || !d.open) return;
+		closeMenus(d);
+		placeMenu(d);
+		var first = d.querySelector('.ppa-menu-list a');
+		if (first) first.focus({ preventScroll: true });
+	}, true);
+
+	document.addEventListener('click', function (e) {
+		var inMenu = e.target.closest && e.target.closest('details.ppa-menu');
+		if (!inMenu) closeMenus(null);
+		else if (e.target.closest('.ppa-menu-list a')) inMenu.open = false;
+	});
+
+	document.addEventListener('keydown', function (e) {
+		var d = e.target.closest && e.target.closest('details.ppa-menu[open]');
+		if (!d) return;
+		var links = Array.prototype.slice.call(d.querySelectorAll('.ppa-menu-list a'));
+		var i = links.indexOf(document.activeElement);
+		if (e.key === 'Escape') {
+			d.open = false;
+			d.querySelector('summary').focus();
+			e.preventDefault();
+			e.stopPropagation();
+		} else if (e.key === 'ArrowDown' && links.length) {
+			links[(i + 1) % links.length].focus();
+			e.preventDefault();
+		} else if (e.key === 'ArrowUp' && links.length) {
+			links[(i - 1 + links.length) % links.length].focus();
+			e.preventDefault();
+		}
+	});
+
+	window.addEventListener('scroll', function () { closeMenus(null); }, true);
+	window.addEventListener('resize', function () { closeMenus(null); });
+	document.addEventListener('ppa:unload', function () { closeMenus(null); });
+
+	/* ---------------------------------------------------------------- */
 	/* Small page enhancements, run on every page                       */
 	/* ---------------------------------------------------------------- */
 
@@ -667,7 +744,14 @@
 		}
 	}
 
+	// "back to top" only shows once there is a top to go back to.
+	function markScrolled() {
+		document.body.classList.toggle('ppa-scrolled', window.scrollY > 300);
+	}
+	window.addEventListener('scroll', markScrolled, { passive: true });
+
 	document.addEventListener('ppa:load', function (e) {
+		markScrolled();
 		if (e.detail && e.detail.dialog) return;   // the dialog does its own
 		var m = main();
 		if (m) markDangerButtons(m);

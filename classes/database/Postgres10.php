@@ -129,6 +129,8 @@ class Postgres10 extends Postgres11 {
 					pt.typname FROM pg_catalog.pg_type pt, pg_catalog.pg_namespace pn
 					WHERE pt.typnamespace=pn.oid AND typname ILIKE {$term}
 					AND (pt.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = pt.typrelid))
+					-- not the array type PostgreSQL makes for every type (_name)
+					AND NOT (pt.typcategory = 'A' AND pt.typelem <> 0)
 					{$where}
 			 	UNION ALL
 				SELECT 'OPERATOR', po.oid, pn.nspname, NULL, po.oprname FROM pg_catalog.pg_operator po, pg_catalog.pg_namespace pn

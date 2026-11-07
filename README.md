@@ -42,25 +42,35 @@ kept it alive with PHP 8 fixes, and this repo builds on that. What's added here:
   back button work. Pages load in place; the object tree on the left keeps
   its state.
 - **Ctrl+K** jumps to the tree filter. Type part of a name, **Enter** opens the
-  first match. Only branches you've opened are searched. The tree can be
-  resized by dragging its edge (double-click resets it); on a phone it slides
-  in from the ☰ button.
+  first match among the branches you've opened; with no match there, Enter
+  (or the link under the tree) searches the whole current database. The tree
+  opens itself down to the page you're on. It can be resized by dragging its
+  edge (double-click resets it); on a phone it slides in from the ☰ button.
 - In the SQL editor, **Ctrl+Enter** (Cmd+Enter on a Mac) runs the query, or
   only the selected text if there is a selection. Keywords, schemas, tables and
   columns are suggested as you type (and after `schema.` or `table.`).
   Picking a schema lists its tables; tables outside the search path are
   offered by their bare name and inserted as `schema.table`. **Ctrl+Space**
-  shows suggestions any time. "Explain analyze" really runs the statement. The
-  last 50 queries per database are kept in your browser under "Recent
-  queries".
+  shows suggestions any time. "Explain analyze" really runs the statement.
+  "Recent queries" and the History page show the same list: the last 50
+  queries run on the database in this session. "Show results in the data
+  grid" gives pages, sorting and filters; unticked, up to 1000 rows come back
+  as a plain table. The box remembers how you left it.
 - When browsing a table, the row above the data filters each column
   (`=value` for an exact match), and the page size can be changed. Big tables
   show an estimated row count ("about 1.2M rows") instead of counting every
-  row; there's a link to count exactly. Double-click a cell to copy its full
+  row; there's a link to count exactly. Without a chosen order, the newest
+  rows (by primary key) come first. Double-click a cell to copy its full
   value. Edit opens the row in a panel next to the grid, Delete asks in a
   small dialog; either way you stay on the same page, filters and scroll
-  position. Drop/empty confirmations elsewhere open as dialogs too.
+  position. Tables without a primary key or unique column can't be edited
+  here. Drop/empty confirmations elsewhere open as dialogs too.
   Ctrl/Cmd+click opens the full page instead.
+- In lists, rows with many actions show the first two and a "⋯" menu with the
+  rest; actions that destroy something (Drop, Empty, Delete) come last, in
+  red.
+- A failed login says why (wrong password, server unreachable, pg_hba.conf,
+  SSL) and shows the server's own message.
 
 ## Running it
 

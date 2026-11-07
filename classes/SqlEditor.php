@@ -104,13 +104,60 @@
 		}
 
 		/**
-		 * Prints the "paginate results" checkbox.
+		 * Prints the "show results in the data grid" checkbox. The hidden
+		 * field tells sql.php the box was on the form, so an unticked box
+		 * can be remembered as well.
 		 */
 		static function printPaginate($checked) {
 			global $lang;
 
-			echo "<p><label for=\"paginate\"><input type=\"checkbox\" id=\"paginate\" name=\"paginate\"",
+			echo "<p><input type=\"hidden\" name=\"paginate_shown\" value=\"1\" />",
+				"<label for=\"paginate\"><input type=\"checkbox\" id=\"paginate\" name=\"paginate\"",
 				($checked ? ' checked="checked"' : ''), " />&nbsp;{$lang['strpaginate']}</label></p>\n";
+		}
+
+		/** Whether the data grid box starts ticked: as the user last left it. */
+		static function paginateDefault() {
+			return isset($_SESSION['sqlpaginate']) ? (bool) $_SESSION['sqlpaginate'] : true;
+		}
+
+		/** Remembers the data grid box of a submitted editor form. */
+		static function rememberPaginate() {
+			if (isset($_POST['paginate_shown']))
+				$_SESSION['sqlpaginate'] = isset($_POST['paginate']);
+		}
+
+		/** Prints the schema search path field. */
+		static function printSearchPath($value) {
+			global $misc, $lang;
+
+			echo "<p class=\"sql-search-path\"><label>";
+			$misc->printHelp($lang['strsearchpath'], 'pg.schema.search_path');
+			echo ": <input type=\"text\" name=\"search_path\" size=\"50\" value=\"", htmlspecialchars($value), "\" /></label></p>\n";
+		}
+
+		/**
+		 * The editor above query results, the same on both kinds of results
+		 * (a plain table from sql.php, the data grid from display.php).
+		 * @param $text The SQL to put in the editor
+		 * @param $opts search_path, paginate (bool), error, selection
+		 */
+		static function printResultsForm($text, $opts = array()) {
+			global $misc;
+
+			echo "<form action=\"sql.php\" method=\"post\" enctype=\"multipart/form-data\" id=\"sql-editor-form\" class=\"sql-editor-form\">\n";
+			echo $misc->form;
+			if (isset($_REQUEST['return']))
+				echo "<input type=\"hidden\" name=\"return\" value=\"", htmlspecialchars($_REQUEST['return']), "\" />\n";
+			self::printSearchPath(isset($opts['search_path']) ? $opts['search_path'] : '');
+			self::printTextarea($text, array(
+				'rows' => 6,
+				'error' => isset($opts['error']) ? $opts['error'] : null,
+				'selection' => isset($opts['selection']) ? $opts['selection'] : null,
+			));
+			self::printPaginate(!empty($opts['paginate']));
+			self::printButtons(false);
+			echo "</form>\n";
 		}
 
 		/**
@@ -121,7 +168,23 @@
 		static function printButtons($reset = true) {
 			global $lang;
 
-			echo "<div class=\"sql-editor-toolbar\" data-label-history=\"", htmlspecialchars($lang['strsqlhistory']),
+			// The recent queries menu shows the same history as the History
+			// page (kept in the session), most recent first.
+			$recent = array();
+			if (isset($_REQUEST['server'], $_REQUEST['database']) && is_string($_REQUEST['server']) && is_string($_REQUEST['database'])
+					&& isset($_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']])) {
+				foreach (array_reverse($_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']]) as $h) {
+					if (strlen($h['query']) <= 20000) $recent[] = $h['query'];
+				}
+			}
+			$historyUrl = '';
+			if (isset($_REQUEST['server'], $_REQUEST['database']) && is_string($_REQUEST['server']) && is_string($_REQUEST['database']))
+				$historyUrl = 'history.php?' . http_build_query(array('server' => $_REQUEST['server'], 'database' => $_REQUEST['database']), '', '&');
+
+			echo "<div class=\"sql-editor-toolbar\" data-history=\"", htmlspecialchars(json_encode($recent, JSON_INVALID_UTF8_SUBSTITUTE)),
+				"\" data-history-url=\"", htmlspecialchars($historyUrl),
+				"\" data-label-history-all=\"", htmlspecialchars($lang['strsqlhistoryall']),
+				"\" data-label-history=\"", htmlspecialchars($lang['strsqlhistory']),
 				"\" data-label-history-empty=\"", htmlspecialchars($lang['strsqlhistoryempty']),
 				"\" data-label-history-clear=\"", htmlspecialchars($lang['strsqlhistoryclear']), "\">\n";
 			echo "<input type=\"submit\" name=\"execute\" accesskey=\"r\" class=\"sql-editor-execute\" value=\"",
