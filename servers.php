@@ -153,7 +153,7 @@
 			// Show different icons for logged in/out
 			'icon'   => field('icon'),
 			
-			'toolTip'=> field('id'),
+			'toolTip'=> field('tooltip'),
 			
 			'action' => field('action'),
 

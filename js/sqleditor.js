@@ -5,7 +5,8 @@
  * The textarea stays the form field, so the form works without this script.
  * With it you get syntax highlighting, autocompletion (Ctrl+Space, and after
  * typing "."), Ctrl/Cmd+Enter to run, "run only the selection" and a menu of
- * recently run queries kept in localStorage.
+ * recently run queries (the session's history of the database, the same
+ * list as the History page, given in the toolbar's data-history).
  *
  * Textarea attributes read here:
  *   data-sql-run        Ctrl+Enter submits the form, selection and history work
@@ -30,24 +31,7 @@
 
 	if (window.PPASqlEditor) return;
 
-	var HISTORY_MAX = 50;
-	var HISTORY_MAX_LENGTH = 100000;
-	var STORAGE_PREFIX = 'ppa.sqlhistory:';
 	var editors = [];
-
-	/* ---- localStorage, which may be missing or full ---- */
-
-	function storageGet(key) {
-		try { return window.localStorage.getItem(key); } catch (e) { return null; }
-	}
-
-	function storageSet(key, value) {
-		try { window.localStorage.setItem(key, value); return true; } catch (e) { return false; }
-	}
-
-	function storageRemove(key) {
-		try { window.localStorage.removeItem(key); } catch (e) { /* ignore */ }
-	}
 
 	/* ---- helpers ---- */
 
@@ -58,25 +42,14 @@
 		return el.value || '';
 	}
 
-	function historyKey(form) {
-		return STORAGE_PREFIX + fieldValue(form, 'server') + '|' + fieldValue(form, 'database');
-	}
-
+	/* The recent queries are the server's history of this database (the
+	 * same list as the History page), written into the toolbar. */
 	function readHistory(form) {
+		var toolbar = form.querySelector('.sql-editor-toolbar');
 		var list;
-		try { list = JSON.parse(storageGet(historyKey(form)) || '[]'); } catch (e) { list = []; }
+		try { list = JSON.parse((toolbar && toolbar.getAttribute('data-history')) || '[]'); } catch (e) { list = []; }
 		if (!Array.isArray(list)) return [];
 		return list.filter(function (q) { return typeof q === 'string'; });
-	}
-
-	function pushHistory(form, query) {
-		if (!query || !query.trim() || query.length > HISTORY_MAX_LENGTH) return;
-		var list = readHistory(form).filter(function (q) { return q !== query; });
-		list.unshift(query);
-		list = list.slice(0, HISTORY_MAX);
-		// When storage is full, keep dropping the oldest entries.
-		while (list.length && !storageSet(historyKey(form), JSON.stringify(list)))
-			list.pop();
 	}
 
 	function findEditor(textarea) {
@@ -292,7 +265,7 @@
 		// Grow with the content between the textarea's height and 60% of the
 		// window, until the user resizes it by hand.
 		var lineHeight = cm.defaultTextHeight();
-		var minHeight = Math.round(Math.max(5, Math.min(rows, 20)) * lineHeight + 10);
+		var minHeight = Math.round(Math.max(2, Math.min(rows, 20)) * lineHeight + 10);
 		function autoSize() {
 			if (ed.userSized) return;
 			var maxHeight = Math.max(minHeight, Math.round(window.innerHeight * 0.6));
@@ -431,15 +404,14 @@
 				ul.appendChild(li);
 			});
 			panel.appendChild(ul);
-			var clear = document.createElement('button');
-			clear.type = 'button';
-			clear.className = 'sql-editor-history-clear';
-			clear.textContent = toolbar.getAttribute('data-label-history-clear') || 'Clear';
-			clear.addEventListener('click', function () {
-				storageRemove(historyKey(form));
-				render();
-			});
-			panel.appendChild(clear);
+			var url = toolbar.getAttribute('data-history-url');
+			if (url) {
+				var all = document.createElement('a');
+				all.className = 'sql-editor-history-all';
+				all.href = url;
+				all.textContent = toolbar.getAttribute('data-label-history-all') || 'All history';
+				panel.appendChild(all);
+			}
 		}
 
 		menu.addEventListener('toggle', function () {
@@ -490,7 +462,6 @@
 			addHidden(textarea, 'sqleditor_text', full);
 			addHidden(textarea, 'sqleditor_selection', [start.line, start.ch, end.line, end.ch].join(':'));
 		}
-		if (!hasScriptFile(form)) pushHistory(form, run);
 	}
 
 	window.addEventListener('submit', function (e) {

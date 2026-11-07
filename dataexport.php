@@ -314,20 +314,20 @@
 		echo "<table>\n";
 		echo "<tr><th class=\"data\">{$lang['strformat']}:</th><td><select name=\"d_format\">\n";
 		// COPY and SQL require a table
-		if (isset($_REQUEST['table'])) {
-			echo "<option value=\"copy\">COPY</option>\n";
-			echo "<option value=\"sql\">SQL</option>\n";
-		}
-		echo "<option value=\"csv\">CSV</option>\n";
+		echo "<option value=\"csv\" selected=\"selected\">CSV</option>\n";
 		echo "<option value=\"tab\">{$lang['strtabbed']}</option>\n";
+		if (isset($_REQUEST['table'])) {
+			echo "<option value=\"sql\">{$lang['strexportsql']}</option>\n";
+			echo "<option value=\"copy\">{$lang['strexportcopy']}</option>\n";
+		}
 		echo "<option value=\"html\">XHTML</option>\n";
 		echo "<option value=\"xml\">XML</option>\n";
 		echo "</select></td></tr>";
 		echo "</table>\n";
 
 		echo "<h3>{$lang['stroptions']}</h3>\n";
-		echo "<p><input type=\"radio\" id=\"output1\" name=\"output\" value=\"show\" checked=\"checked\" /><label for=\"output1\">{$lang['strshow']}</label>\n";
-		echo "<br/><input type=\"radio\" id=\"output2\" name=\"output\" value=\"download\" /><label for=\"output2\">{$lang['strdownload']}</label></p>\n";
+		echo "<p><input type=\"radio\" id=\"output1\" name=\"output\" value=\"show\" /><label for=\"output1\">{$lang['strshow']}</label>\n";
+		echo "<br/><input type=\"radio\" id=\"output2\" name=\"output\" value=\"download\" checked=\"checked\" /><label for=\"output2\">{$lang['strdownload']}</label></p>\n";
 
 		echo "<p><input type=\"hidden\" name=\"action\" value=\"export\" />\n";
 		echo "<input type=\"hidden\" name=\"what\" value=\"dataonly\" />\n";

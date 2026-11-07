@@ -728,6 +728,7 @@
 				'errorText' => $lang['strerrorloading'],
 				'errorIcon' => $this->icon('ObjectNotFound'),
 				'noMatchText' => $lang['strnotreematch'],
+				'searchText' => $lang['strtreesearchdb'],
 			);
 			echo "<aside id=\"ppa-sidebar\" aria-label=\"", htmlspecialchars($lang['strobjectbrowser']), "\">\n";
 			// "logo" picks up each theme's logo styling.
@@ -832,10 +833,8 @@
 
 					echo "<li class=\"tab", ($isActive ? ' active' : ''), "\">";
 
-					if (isset($tab['help']))
-						$this->printHelp($tablink, $tab['help']);
-					else
-						echo $tablink;
+					// No "?" help marker on tabs: the page title has one.
+					echo $tablink;
 
 					echo "</li>\n";
 				}
@@ -1594,10 +1593,8 @@
 
 				$crumblink .= "<span class=\"label\">" . htmlspecialchars($crumb['text']) . "</span></a>";
 
-				if (isset($crumb['help']))
-					$this->printHelp($crumblink, $crumb['help']);
-				else
-					echo $crumblink;
+				// No "?" help marker in the trail: it only added noise.
+				echo $crumblink;
 
 				echo "<span class=\"sep\" aria-hidden=\"true\">{$lang['strseparator']}</span>";
 				echo "</li>";
@@ -1910,8 +1907,9 @@
 			echo $str;
 			if ($help) {
 				echo "<a class=\"help\" href=\"";
-				echo htmlspecialchars("help.php?help=".urlencode($help)."&server=".urlencode($_REQUEST['server']));
-				echo "\" title=\"{$lang['strhelp']}\" target=\"phppgadminhelp\">{$lang['strhelpicon']}</a>";
+				echo htmlspecialchars("help.php?help=".urlencode($help)."&server=".urlencode($_REQUEST['server'] ?? ''));
+				echo "\" title=\"", htmlspecialchars($lang['strhelpdocs']), "\" aria-label=\"", htmlspecialchars($lang['strhelpdocs']),
+					"\" target=\"_blank\" rel=\"noopener\">{$lang['strhelpicon']}</a>";
 			}
 		}
 
@@ -2083,6 +2081,56 @@
 		 *					 The function must not must not store urls because
 		 *					 they are relative and won't work out of context.
 		 */
+		/** Action keys that destroy or stop something: shown last, in red. */
+		const DANGER_ACTIONS = '/^(drop|empty|delete|remove|truncate|cancel|kill|terminate|purge|revoke)/i';
+
+		/**
+		 * The actions of one row of a list. With up to three actions they
+		 * are all shown; with more, the first two safe ones are shown and
+		 * the rest go in a "more" menu. Actions that destroy something come
+		 * last and are marked, so they don't sit between routine ones.
+		 */
+		function printRowActions($actions, $fields) {
+			global $lang;
+			$safe = array();
+			$danger = array();
+			foreach ($actions as $key => $action) {
+				if (isset($action['disable']) && $action['disable'] === true) continue;
+				$action['fields'] = $fields;
+				if (preg_match(self::DANGER_ACTIONS, (string) $key)) {
+					$action['attr']['class'] = trim(($action['attr']['class'] ?? '') . ' danger');
+					$danger[] = $action;
+				} else {
+					$safe[] = $action;
+				}
+			}
+			$all = array_merge($safe, $danger);
+			if (count($all) <= 3) {
+				$inline = $all;
+				$more = array();
+			} else {
+				$inline = array_slice($safe, 0, 2);
+				$more = array_merge(array_slice($safe, 2), $danger);
+			}
+			echo "<div class=\"ppa-row-actions\">";
+			foreach ($inline as $action) $this->printLink($action);
+			if ($more) {
+				$label = htmlspecialchars($lang['strmoreactions']);
+				echo "<details class=\"ppa-menu\"><summary title=\"{$label}\" aria-label=\"{$label}\">&#x22EF;</summary><div class=\"ppa-menu-list\">";
+				$sep = false;
+				foreach ($more as $action) {
+					$isDanger = strpos($action['attr']['class'] ?? '', 'danger') !== false;
+					if ($isDanger && !$sep && count($more) > count($danger)) {
+						echo "<hr />";
+						$sep = true;
+					}
+					$this->printLink($action);
+				}
+				echo "</div></details>";
+			}
+			echo "</div>";
+		}
+
 		function printTable(&$tabledata, &$columns, &$actions, $place, $nodata = null, $pre_fn = null) {
 			global $data, $conf, $misc, $lang, $plugin_manager;
 
@@ -2127,7 +2175,7 @@
 					$class = ($column['class'] ?? '') !== '' ? " {$column['class']}" : '';
 					switch ($column_id) {
 						case 'actions':
-							if (sizeof($actions) > 0) echo "<th class=\"data\" colspan=\"", count($actions), "\">{$column['title']}</th>\n";
+							if (sizeof($actions) > 0) echo "<th class=\"data\">{$column['title']}</th>\n";
 							break;
 						default:
 							echo "<th class=\"data{$class}\">";
@@ -2169,15 +2217,10 @@
 
 						switch ($column_id) {
 							case 'actions':
-								foreach ($alt_actions as $action) {
-									if (isset($action['disable']) && $action['disable'] === true) {
-										echo "<td></td>\n";
-									} else {
-										echo "<td class=\"opbutton{$id}\">";
-										$action['fields'] = $tabledata->fields;
-										$this->printLink($action);
-										echo "</td>\n";
-									}
+								if (sizeof($actions) > 0) {
+									echo "<td class=\"ppa-actions-cell\">";
+									$this->printRowActions($alt_actions, $tabledata->fields);
+									echo "</td>\n";
 								}
 								break;
 							case 'comment':
@@ -2201,6 +2244,8 @@
 									$params = isset($column['params']) ? $column['params'] : array();
 									echo $misc->printVal($val, $type, $params);
 									if (isset($column['url'])) echo "</a>";
+								} elseif (isset($column['params']['null'])) {
+									echo $misc->printVal(null, null, $column['params']);
 								}
 
 								echo "</td>\n";
@@ -2536,7 +2581,7 @@
 			$logins = isset($_SESSION['webdbLogin']) && is_array($_SESSION['webdbLogin']) ? $_SESSION['webdbLogin'] : array();
 			$srvs = array();
 
-			global $conf;
+			global $conf, $lang;
 			if (($group !== false) and ($group !== 'all'))
 				if (isset($conf['srv_groups'][$group]['servers']))
 					$group = array_fill_keys(explode(',', preg_replace('/\s/', '',
@@ -2558,6 +2603,10 @@
 
 					$srvs[$server_id]['id'] = $server_id;
 					$logged_in = isset($srvs[$server_id]['username']);
+					// Says what the grey/red icon means
+					$srvs[$server_id]['tooltip'] = $logged_in
+						? sprintf($lang['strloggedinas'], $srvs[$server_id]['username'])
+						: $lang['strnotconnected'];
 
 					if (isset($info['database'])) {
 						$srvs[$server_id]['action'] = url('redirect.php',
@@ -2633,6 +2682,7 @@
 						'id' => $srv['host'].':'.$srv['port'],
 						'desc' => $srv['server_desc'],
 						'icon' => 'DisconnectedServer',
+						'tooltip' => $GLOBALS['lang']['strdbloginsgroup'],
 						'action' => url('servers.php',
 							array('dbserver' => $srv['server_index'])
 						),
@@ -2747,6 +2797,10 @@
 			list($usec, $sec) = explode(' ', microtime());
 			$time = ((float)$usec + (float)$sec);
 			$history =& $_SESSION['history'][$_REQUEST['server']][$_REQUEST['database']];
+			// Running a query again moves it to the top instead of repeating it.
+			if (is_array($history))
+				foreach ($history as $k => $h)
+					if ($h['query'] === $script) unset($history[$k]);
 			$history["$time"] = array(
 				'query' => $script,
 				'paginate' => (!isset($_REQUEST['paginate'])? 'f':'t'),

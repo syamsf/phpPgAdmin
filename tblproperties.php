@@ -154,10 +154,10 @@
 		echo "<input type=\"radio\" id=\"what1\" name=\"what\" value=\"dataonly\" checked=\"checked\" /><label for=\"what1\">{$lang['strdataonly']}</label></th>\n";
 		echo "<td>{$lang['strformat']}</td>\n";
 		echo "<td><select name=\"d_format\">\n";
-		echo "<option value=\"copy\">COPY</option>\n";
-		echo "<option value=\"sql\">SQL</option>\n";
-		echo "<option value=\"csv\">CSV</option>\n";
+		echo "<option value=\"csv\" selected=\"selected\">CSV</option>\n";
 		echo "<option value=\"tab\">{$lang['strtabbed']}</option>\n";
+		echo "<option value=\"sql\">{$lang['strexportsql']}</option>\n";
+		echo "<option value=\"copy\">{$lang['strexportcopy']}</option>\n";
 		echo "<option value=\"html\">XHTML</option>\n";
 		echo "<option value=\"xml\">XML</option>\n";
 		echo "</select>\n</td>\n</tr>\n";
@@ -166,24 +166,24 @@
 		}
 		// Structure only
 		echo "<tr><th class=\"data left\"><input type=\"radio\" id=\"what2\" name=\"what\" value=\"structureonly\" /><label for=\"what2\">{$lang['strstructureonly']}</label></th>\n";
-		echo "<td><label for=\"s_clean\">{$lang['strdrop']}</label></td><td><input type=\"checkbox\" id=\"s_clean\" name=\"s_clean\" /></td>\n</tr>\n";
+		echo "<td><label for=\"s_clean\">{$lang['strexportdrop']}</label></td><td><input type=\"checkbox\" id=\"s_clean\" name=\"s_clean\" /></td>\n</tr>\n";
 		// Structure and data
 		echo "<tr><th class=\"data left\" rowspan=\"", ($hasID) ? 3 : 2, "\">";
 		echo "<input type=\"radio\" id=\"what3\" name=\"what\" value=\"structureanddata\" /><label for=\"what3\">{$lang['strstructureanddata']}</label></th>\n";
 		echo "<td>{$lang['strformat']}</td>\n";
 		echo "<td><select name=\"sd_format\">\n";
-		echo "<option value=\"copy\">COPY</option>\n";
-		echo "<option value=\"sql\">SQL</option>\n";
+		echo "<option value=\"copy\">{$lang['strexportcopy']}</option>\n";
+		echo "<option value=\"sql\">{$lang['strexportsql']}</option>\n";
 		echo "</select>\n</td>\n</tr>\n";
-		echo "<tr><td><label for=\"sd_clean\">{$lang['strdrop']}</label></td><td><input type=\"checkbox\" id=\"sd_clean\" name=\"sd_clean\" /></td>\n</tr>\n";
+		echo "<tr><td><label for=\"sd_clean\">{$lang['strexportdrop']}</label></td><td><input type=\"checkbox\" id=\"sd_clean\" name=\"sd_clean\" /></td>\n</tr>\n";
 		if ($hasID) {
 			echo "<tr><td><label for=\"sd_oids\">{$lang['stroids']}</label></td><td><input type=\"checkbox\" id=\"sd_oids\" name=\"sd_oids\" /></td>\n</tr>\n";
 		}
 		echo "</table>\n";
 
 		echo "<h3>{$lang['stroptions']}</h3>\n";
-		echo "<p><input type=\"radio\" id=\"output1\" name=\"output\" value=\"show\" checked=\"checked\" /><label for=\"output1\">{$lang['strshow']}</label>\n";
-		echo "<br/><input type=\"radio\" id=\"output2\" name=\"output\" value=\"download\" /><label for=\"output2\">{$lang['strdownload']}</label></p>\n";
+		echo "<p><input type=\"radio\" id=\"output1\" name=\"output\" value=\"show\" /><label for=\"output1\">{$lang['strshow']}</label>\n";
+		echo "<br/><input type=\"radio\" id=\"output2\" name=\"output\" value=\"download\" checked=\"checked\" /><label for=\"output2\">{$lang['strdownload']}</label></p>\n";
 
 		echo "<p><input type=\"hidden\" name=\"action\" value=\"export\" />\n";
 		echo $misc->form;
@@ -206,7 +206,21 @@
 			// Don't show upload option if max size of uploads is zero
 			$max_size = $misc->inisizeToBytes(ini_get('upload_max_filesize'));
 			if (is_double($max_size) && $max_size > 0) {
-				echo "<form action=\"dataimport.php\" method=\"post\" enctype=\"multipart/form-data\">\n";
+				// The table's columns, so the preview can check the file's first line
+				$import_columns = array();
+				$attrs = $data->getTableAttributes($_REQUEST['table']);
+				while ($attrs && !$attrs->EOF) {
+					$import_columns[] = $attrs->fields['attname'];
+					$attrs->moveNext();
+				}
+				echo "<script src=\"js/import.js\" type=\"text/javascript\"></script>\n";
+				echo "<form action=\"dataimport.php\" method=\"post\" enctype=\"multipart/form-data\" class=\"import-form\"",
+					" data-columns=\"", htmlspecialchars(json_encode($import_columns)), "\"",
+					" data-label-preview=\"", htmlspecialchars($lang['strimportpreview']), "\"",
+					" data-label-unknown=\"", htmlspecialchars($lang['strimportunknowncol']), "\"",
+					" data-label-ok=\"", htmlspecialchars($lang['strimportcolsok']), "\"",
+					" data-label-xml=\"", htmlspecialchars($lang['strimportnopreview']), "\">\n";
+				echo "<p class=\"hint\">", htmlspecialchars($lang['strimporthelp']), "</p>\n";
 				echo "<table>\n";
 				echo "\t<tr>\n\t\t<th class=\"data left required\">{$lang['strformat']}</th>\n";
 				echo "\t\t<td><select name=\"format\">\n";
@@ -223,8 +237,9 @@
 				echo "\t\t<label><input type=\"checkbox\" name=\"allowednulls[2]\" value=\"\" />{$lang['stremptystring'] }</label></td>\n\t</tr>\n";
 				echo "\t<tr>\n\t\t<th class=\"data left required\">{$lang['strfile']}</th>\n";
 				echo "\t\t<td><input type=\"hidden\" name=\"MAX_FILE_SIZE\" value=\"{$max_size}\" />";
-				echo "<input type=\"file\" name=\"source\" /></td>\n\t</tr>\n";
+				echo "<input type=\"file\" name=\"source\" accept=\".csv,.txt,.tsv,.xml,text/csv,text/plain,text/xml\" /></td>\n\t</tr>\n";
 				echo "</table>\n";
+				echo "<div class=\"import-preview\" hidden></div>\n";
 				echo "<p><input type=\"hidden\" name=\"action\" value=\"import\" />\n";
 				echo $misc->form;
 				echo "<input type=\"hidden\" name=\"table\" value=\"", htmlspecialchars($_REQUEST['table']), "\" />\n";
@@ -248,7 +263,9 @@
 			case 1:
 				// Set variable defaults
 				if (!isset($_POST['field'])) $_POST['field'] = '';
-				if (!isset($_POST['type'])) $_POST['type'] = '';
+				// A new column is most often text; SERIAL (first in the list)
+				// would quietly fill every existing row from a new sequence.
+				if (!isset($_POST['type'])) $_POST['type'] = 'text';
 				if (!isset($_POST['array'])) $_POST['array'] = '';
 				if (!isset($_POST['length'])) $_POST['length'] = '';
 				if (!isset($_POST['default'])) $_POST['default'] = '';
@@ -266,7 +283,7 @@
 				echo "<form action=\"tblproperties.php\" method=\"post\">\n";
 
 				// Output table header
-				echo "<table>\n";
+				echo "<div class=\"ppa-scroll-x\"><table>\n";
 				echo "<tr><th class=\"data required\">{$lang['strname']}</th>\n<th colspan=\"2\" class=\"data required\">{$lang['strtype']}</th>\n";
 				echo "<th class=\"data\">{$lang['strlength']}</th>\n";
 				if ($data->hasCreateFieldWithConstraints())
@@ -314,9 +331,9 @@
 					echo "<td><input name=\"default\" size=\"20\" value=\"",
 						htmlspecialchars($_POST['default']), "\" /></td>\n";
 				}
-				echo "<td><input name=\"comment\" size=\"40\" value=\"",
+				echo "<td><input name=\"comment\" size=\"30\" value=\"",
 					htmlspecialchars($_POST['comment']), "\" /></td></tr>\n";
-				echo "</table>\n";
+				echo "</table></div>\n";
 				echo "<p><input type=\"hidden\" name=\"action\" value=\"add_column\" />\n";
 				echo "<input type=\"hidden\" name=\"stage\" value=\"2\" />\n";
 				echo $misc->form;

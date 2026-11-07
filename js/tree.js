@@ -49,6 +49,13 @@
 		this.empty.textContent = cfg.noMatchText;
 		container.appendChild(this.empty);
 
+		// While filtering: a link to search the whole current database,
+		// since the filter only sees branches that have been loaded.
+		this.search = document.createElement('a');
+		this.search.className = 'ppa-tree-search';
+		this.search.hidden = true;
+		container.appendChild(this.search);
+
 		this.root = this.makeNode(null, {
 			text: cfg.rootText,
 			action: cfg.rootAction,
@@ -158,6 +165,7 @@
 			this.open[node.key] = 1;
 			this.saveOpen();
 		}
+		if (node.loading && !opts.reload) return node.loadPromise;
 		if (node.children === null || opts.reload) return this.load(node);
 		return Promise.resolve();
 	};
@@ -201,7 +209,7 @@
 		while (node.group.firstChild) node.group.removeChild(node.group.firstChild);
 		this.message(node, this.cfg.loadingText, 'ppa-loading');
 
-		return fetch(node.data.src, { credentials: 'same-origin', headers: { 'Accept': 'text/xml' } })
+		return node.loadPromise = fetch(node.data.src, { credentials: 'same-origin', headers: { 'Accept': 'text/xml' } })
 			.then(function (res) { return res.text(); })
 			.then(function (text) {
 				if (gen !== self.generation) return;
@@ -399,6 +407,112 @@
 		this.root.li.classList.toggle('ppa-filter-open', q !== '');
 		this.list.classList.toggle('ppa-filtering', q !== '');
 		this.empty.hidden = q === '' || any;
+		this.updateSearch();
+	};
+
+	/** The database of the page being shown, from its address. */
+	function currentDatabase() {
+		var p = new URLSearchParams(location.search);
+		return p.get('server') && p.get('database') ? { server: p.get('server'), database: p.get('database') } : null;
+	}
+
+	Tree.prototype.updateSearch = function () {
+		var q = (document.getElementById('ppa-tree-filter') || {}).value || '';
+		q = q.trim();
+		var db = currentDatabase();
+		if (q === '' || !db || !this.cfg.searchText) {
+			this.search.hidden = true;
+			return;
+		}
+		var u = new URL('database.php', location.href);
+		u.search = new URLSearchParams({ server: db.server, database: db.database, subject: 'database', action: 'find', term: q }).toString();
+		this.search.href = u.href;
+		this.search.textContent = this.cfg.searchText.replace('%1', q).replace('%2', db.database);
+		this.search.hidden = false;
+	};
+
+	/* ---------------------------------------------------------------- */
+	/* Reveal: open the branches down to the object the page shows       */
+	/* ---------------------------------------------------------------- */
+
+	// Where the objects of a kind are listed, for picking the right folder.
+	var FOLDERS = {
+		schema: 'schemas.php', table: 'tables.php', view: 'views.php', matview: 'materializedviews.php',
+		sequence: 'sequences.php', function: 'functions.php', domain: 'domains.php', type: 'types.php',
+		aggregate: 'aggregates.php', operator: 'operators.php', fulltext: 'fulltext.php'
+	};
+	var LEVELS = ['server', 'database', 'schema'];
+
+	function paramsOf(href) {
+		if (!href) return null;
+		try {
+			var u = new URL(href, location.href);
+			return { file: u.pathname.substring(u.pathname.lastIndexOf('/') + 1), p: u.searchParams };
+		} catch (e) { return null; }
+	}
+
+	/** What the page shows, as the keys the tree uses in its URLs. */
+	function pageTarget() {
+		var p = new URLSearchParams(location.search);
+		if (!p.get('server')) return null;
+		var keys = [];
+		LEVELS.forEach(function (k) { if (p.get(k)) keys.push([k, p.get(k)]); });
+		var subject = p.get('subject');
+		if (subject && LEVELS.indexOf(subject) === -1 && p.get(subject) && FOLDERS[subject]) keys.push([subject, p.get(subject)]);
+		return keys;
+	}
+
+	Tree.prototype.reveal = function () {
+		var target = pageTarget();
+		var token = this.revealToken = (this.revealToken || 0) + 1;
+		if (!target) return Promise.resolve();
+		var self = this;
+
+		// A node fits when none of its URL parameters contradicts the target;
+		// "depth" is how many target keys, in order, it carries.
+		function fit(node) {
+			var a = paramsOf(node.data.src) || paramsOf(node.data.action);
+			var b = paramsOf(node.data.action);
+			if (!a) return null;
+			var depth = 0;
+			for (var i = 0; i < target.length; i++) {
+				var k = target[i][0];
+				var v = a.p.get(k) !== null ? a.p.get(k) : (b ? b.p.get(k) : null);
+				if (v === null) break;
+				if (v !== target[i][1]) return null;
+				depth = i + 1;
+			}
+			// A key of another kind (e.g. table= when looking for a view) is a miss.
+			for (var j = depth; j < target.length; j++) {
+				if (a.p.get(target[j][0]) !== null && a.p.get(target[j][0]) !== target[j][1]) return null;
+			}
+			return { depth: depth, file: a.file };
+		}
+
+		function step(node, depth, guard) {
+			if (token !== self.revealToken || guard > 10) return;
+			if (depth >= target.length) {
+				self.select(node);
+				var r = node.row.getBoundingClientRect(), c = self.container.getBoundingClientRect();
+				if (r.top < c.top || r.bottom > c.bottom) node.row.scrollIntoView({ block: 'nearest' });
+				return;
+			}
+			var ready = node.expanded && node.children ? Promise.resolve() : self.expand(node, { restoring: true });
+			return ready.then(function () {
+				if (token !== self.revealToken || !node.children) return;
+				var best = null, folder = null;
+				var want = target[depth][0];
+				node.children.forEach(function (c) {
+					var f = fit(c);
+					if (!f) return;
+					if (f.depth > depth && (!best || f.depth > best.f.depth)) best = { n: c, f: f };
+					else if (f.depth === depth && c.data.src && f.file === FOLDERS[want] && !folder) folder = c;
+				});
+				if (best) return step(best.n, best.f.depth, guard + 1);
+				if (folder) return step(folder, depth, guard + 1);
+			});
+		}
+		return Promise.resolve(step(this.root, 0, 0));
 	};
 
 	Tree.prototype.firstMatch = function () {
@@ -415,6 +529,7 @@
 		var cfg;
 		try { cfg = JSON.parse(el.getAttribute('data-config')); } catch (e) { return; }
 		var tree = ppa.tree = new Tree(el, cfg);
+		tree.reveal();
 
 		var refresh = document.getElementById('ppa-tree-refresh');
 		if (refresh) refresh.addEventListener('click', function () { tree.reload(); });
@@ -429,6 +544,8 @@
 					if (n) {
 						tree.select(n);
 						n.label.click();
+					} else if (!tree.search.hidden) {
+						tree.search.click();
 					}
 				} else if (e.key === 'Escape') {
 					if (filter.value !== '') {
@@ -449,4 +566,12 @@
 	}
 
 	document.addEventListener('DOMContentLoaded', init);
+
+	// Follow the page: open the tree down to what it shows.
+	document.addEventListener('ppa:load', function (e) {
+		if (e.detail && e.detail.dialog) return;
+		if (!ppa.tree) return;
+		ppa.tree.reveal();
+		ppa.tree.updateSearch();
+	});
 })();

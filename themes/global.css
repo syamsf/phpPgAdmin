@@ -82,6 +82,13 @@ p.comment {font-style: italic}
 	border-left: 1px dotted #999;
 	font-size: smaller;
 }
+/* Only once the page has been scrolled (js/app.js sets ppa-scrolled) */
+body.ppa-shell .bottom_link {
+	display: none;
+}
+body.ppa-shell.ppa-scrolled .bottom_link {
+	display: block;
+}
 
 /** FK browsing **/
 div#root {
@@ -267,6 +274,11 @@ li[aria-expanded="true"] > .ppa-node > .ppa-twisty::before { content: "\25BE"; }
 	font-style: italic;
 	opacity: 0.75;
 }
+.ppa-tree-search {
+	display: block;
+	margin: 6px 8px;
+	overflow-wrap: anywhere;
+}
 #ppa-sidebar-resize {
 	position: absolute;
 	top: 0;
@@ -339,14 +351,23 @@ nav.tabs {
 }
 nav.tabs ul {
 	display: flex;
+	flex-wrap: wrap;
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	overflow-x: auto;
 }
+/* Labels on one line, icon beside them: tabs stay one line high, and
+ * when they don't fit they wrap to a second row instead of breaking
+ * "Full Text Search" over three lines. */
 nav.tabs li.tab {
-	flex: 1 1 0;
-	min-width: min-content;
+	flex: 0 1 auto;
+}
+nav.tabs .tab .label {
+	white-space: nowrap;
+}
+nav.tabs .tab .icon {
+	display: inline;
+	margin-inline-end: 4px;
 }
 nav.tabs li.tab + li.tab {
 	border-inline-start-width: 0;
@@ -378,6 +399,78 @@ button:focus-visible {
 
 /* Dialogs (js/app.js): confirmations as a centred modal, row editing as a
  * panel from the side. They take the page's own colours. */
+/* Wide forms scroll sideways inside the page instead of off its edge */
+.ppa-scroll-x {
+	max-width: 100%;
+	overflow-x: auto;
+}
+.hint {
+	font-size: var(--ppa-size-sm, 0.9em);
+	opacity: 0.75;
+}
+
+/* Row actions in lists: a few links, the rest in a "more" menu */
+td.ppa-actions-cell {
+	white-space: nowrap;
+	padding: 2px 6px;
+}
+.ppa-row-actions {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+.ppa-row-actions > a,
+.ppa-menu > summary {
+	display: inline-block;
+	padding: 2px 8px;
+	border: 1px solid rgba(128, 128, 128, 0.45);
+	border-radius: 4px;
+	text-decoration: none;
+	font-size: var(--ppa-size-sm, 0.9em);
+	line-height: 1.5;
+}
+.ppa-row-actions > a:hover,
+.ppa-menu > summary:hover,
+.ppa-menu[open] > summary {
+	background-color: rgba(128, 128, 128, 0.18);
+}
+.ppa-menu > summary {
+	list-style: none;
+	cursor: pointer;
+	user-select: none;
+}
+.ppa-menu > summary::-webkit-details-marker { display: none; }
+.ppa-menu-list {
+	position: fixed;
+	z-index: 60;
+	min-width: 11em;
+	display: flex;
+	flex-direction: column;
+	padding: 4px 0;
+	border: 1px solid rgba(128, 128, 128, 0.5);
+	border-radius: 6px;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+.ppa-menu-list > a {
+	padding: 5px 14px;
+	text-decoration: none;
+	white-space: nowrap;
+}
+.ppa-menu-list > a:hover,
+.ppa-menu-list > a:focus-visible {
+	background-color: rgba(128, 128, 128, 0.18);
+	outline: none;
+}
+.ppa-menu-list > hr {
+	margin: 4px 0;
+	border: 0;
+	border-top: 1px solid rgba(128, 128, 128, 0.4);
+}
+a.danger,
+.ppa-row-actions > a.danger {
+	color: #b3261e;
+}
+
 dialog.ppa-dialog {
 	box-sizing: border-box;
 	padding: 0;
@@ -553,6 +646,17 @@ dialog.ppa-dialog-panel {
 	}
 	#ppa-main {
 		padding: 4px 8px 72px;
+	}
+	nav.tabs ul {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+	}
+	/* Wide lists scroll sideways in their own box, not the whole page */
+	#ppa-main > table,
+	#ppa-main > form > table {
+		display: block;
+		max-width: 100%;
+		overflow-x: auto;
 	}
 	nav.tabs li.tab {
 		flex: 0 0 auto;
@@ -913,3 +1017,55 @@ input.sql-expand:checked ~ .sql-results .sql-full { display: block; }
 input.sql-expand:checked ~ .sql-results td { white-space: pre-wrap; }
 
 /* ---- end SQL editor ---- */
+
+p.grid-hint.grid-no-key {
+	flex-basis: 100%;
+	opacity: 0.9;
+}
+
+/* Role pickers on the role forms */
+.role-chooser {
+	max-height: 14em;
+	overflow: auto;
+	padding: 4px 8px;
+	border: 1px solid rgba(128, 128, 128, 0.45);
+	border-radius: 4px;
+	min-width: 16em;
+}
+.role-chooser > label,
+.role-chooser details > label {
+	display: block;
+	white-space: nowrap;
+}
+.role-chooser summary {
+	cursor: pointer;
+	margin: 4px 0;
+	opacity: 0.8;
+}
+
+/* Import preview */
+.import-preview th.import-unknown {
+	color: #b3261e;
+	text-decoration: underline wavy;
+}
+
+/* Intro page: the servers come first */
+ul.intro-servers {
+	list-style: none;
+	padding-inline-start: 0;
+}
+ul.intro-servers li {
+	margin: 0.3em 0;
+}
+ul.intro-servers img {
+	vertical-align: -3px;
+}
+
+/* Processes: long queries wrap instead of pushing columns off the page */
+td.process-query {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-width: 70ch;
+	font-family: var(--ppa-mono, monospace);
+	font-size: var(--ppa-size-sm, 0.9em);
+}

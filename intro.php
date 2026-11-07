@@ -18,8 +18,24 @@
 	$misc->printTabs('root','intro');
 ?>
 
-<h1><?php echo "$appName $appVersion (PHP ". phpversion() .')' ?></h1>
+<h2><?php echo htmlspecialchars($lang['strservers']) ?></h2>
+<?php
+	// Start here: the servers, each with whether you are logged in.
+	$intro_servers = $misc->groupServersForTree($misc->getServers(false, false));
+	if (count($intro_servers) > 0) {
+		echo "<p>", htmlspecialchars($lang['strpickserver']), "</p>\n";
+		echo "<ul class=\"intro-servers\">\n";
+		foreach ($intro_servers as $srv) {
+			$href = value($srv['action'], $srv, 'html');
+			$icon = $misc->icon($srv['icon']);
+			echo "\t<li><a href=\"{$href}\"><img src=\"", htmlspecialchars($icon), "\" alt=\"\" /> ",
+				htmlspecialchars($srv['desc']), "</a> <span class=\"hint\">", htmlspecialchars($srv['tooltip'] ?? ''), "</span></li>\n";
+		}
+		echo "</ul>\n";
+	}
+?>
 
+<h2><?php echo htmlspecialchars($lang['strsettings']) ?></h2>
 <form method="get" action="intro.php">
 <table>
 	<tr class="data1">
@@ -55,7 +71,7 @@
 <noscript><p><input type="submit" value="<?php echo $lang['stralter'] ?>" /></p></noscript>
 </form>
 
-<p><?php echo $lang['strintro'] ?></p>
+<p class="hint"><?php echo "$appName $appVersion (PHP ". phpversion() .')' ?></p>
 
 <ul class="intro">
 	<li><a href="https://github.com/ReimuHakurei/phpPgAdmin"><?php echo $lang['strppahome'] ?></a></li>

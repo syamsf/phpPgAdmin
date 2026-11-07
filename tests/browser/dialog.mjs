@@ -154,6 +154,10 @@ try {
 	// Drop confirmations from a list open as a modal too
 	await page.goto(`${BASE}tables.php?server=${Q}&database=ppa_test&schema=public&subject=schema`, { waitUntil: 'networkidle0' });
 	const dropLink = await page.evaluateHandle((t) => [...document.querySelectorAll('a[href*="action=confirm_drop"]')].find((a) => a.href.includes('table=' + t)), TABLE);
+	// Drop is in the row's "more actions" menu, last and marked as dangerous
+	check(await dropLink.evaluate((a) => !!a.closest('details.ppa-menu') && a.classList.contains('danger')), 'Drop is in the more-actions menu, marked danger');
+	await dropLink.evaluate((a) => a.closest('details.ppa-menu').querySelector('summary').click());
+	await page.waitForSelector('details.ppa-menu[open] .ppa-menu-list a', { visible: true, timeout: 3000 }).catch(() => {});
 	await dropLink.asElement().click();
 	await page.waitForSelector('dialog.ppa-dialog-modal[open]', { timeout: 5000 }).catch(() => {});
 	check(await dialogOpen('modal'), 'Drop table opens a modal');

@@ -797,6 +797,8 @@ class Postgres extends ADODB_base {
 					pt.typname FROM pg_catalog.pg_type pt, pg_catalog.pg_namespace pn
 					WHERE pt.typnamespace=pn.oid AND typname ILIKE {$term}
 					AND (pt.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = pt.typrelid))
+					-- not the array type PostgreSQL makes for every type (_name)
+					AND NOT (pt.typcategory = 'A' AND pt.typelem <> 0)
 					{$where}
 			 	UNION ALL
 				SELECT 'OPERATOR', po.oid, pn.nspname, NULL, po.oprname FROM pg_catalog.pg_operator po, pg_catalog.pg_namespace pn
@@ -1054,7 +1056,12 @@ class Postgres extends ADODB_base {
 	function getSearchPath() {
 		$sql = 'SELECT current_schemas(false) AS search_path';
 
-		return $this->phpArray($this->selectField($sql, 'search_path'));
+		// Works whether the connection fetches rows by name or by number
+		// (sql.php switches to numbers before showing results).
+		$rs = $this->conn->Execute($sql);
+		if (!$rs || $rs->RecordCount() == 0) return array();
+		$value = isset($rs->fields['search_path']) ? $rs->fields['search_path'] : (isset($rs->fields[0]) ? $rs->fields[0] : '{}');
+		return $this->phpArray($value);
 	}
 
 	// Table functions
@@ -1114,7 +1121,9 @@ class Postgres extends ADODB_base {
 		} else {
 			$sql = "SELECT c.relname, pg_catalog.pg_get_userbyid(c.relowner) AS relowner,
 						pg_catalog.obj_description(c.oid, 'pg_class') AS relcomment,
-						reltuples::bigint,
+						-- -1 (PostgreSQL 14+) or 0 with no pages: never analyzed, unknown
+						CASE WHEN c.reltuples < 0 OR (c.reltuples = 0 AND c.relpages = 0) THEN NULL
+							ELSE c.reltuples::bigint END AS reltuples,
 						CASE c.relkind WHEN 'm' THEN '[MV]' WHEN 'f' THEN '[FDW]@'||n.nspname ELSE (SELECT spcname FROM pg_catalog.pg_tablespace pt
 							WHERE pt.oid=c.reltablespace) END AS tablespace
 					FROM pg_catalog.pg_class c
@@ -7396,6 +7405,7 @@ class Postgres extends ADODB_base {
 					query_start, application_name, client_addr,
 				  case when state='idle in transaction' then '<IDLE> in transaction' when state = 'idle' then '<IDLE>' else query end as query
 				FROM pg_catalog.pg_stat_activity
+				WHERE pid <> pg_catalog.pg_backend_pid()
 				ORDER BY datname, usename, pid";
 		else {
 			$this->clean($database);
@@ -7405,6 +7415,7 @@ class Postgres extends ADODB_base {
 					case when state='idle in transaction' then '<IDLE> in transaction' when state = 'idle' then '<IDLE>' else query end as query
 				FROM pg_catalog.pg_stat_activity
 				WHERE datname='{$database}'
+					AND pid <> pg_catalog.pg_backend_pid()   -- not this page's own query
 				ORDER BY usename, pid";
 		}
 

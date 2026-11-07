@@ -39,18 +39,36 @@ textarea{
 	background-color: #494949;
 	color: white;
 }
+/* Same type sizes as the default theme, so switching themes only
+ * changes colours, not the layout. */
+:root {
+	--ppa-font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+	--ppa-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	--ppa-size: 0.875rem;
+	--ppa-size-sm: 0.8125rem;
+	color-scheme: dark;
+}
+input, select, textarea, button {
+	font-family: var(--ppa-font);
+	font-size: var(--ppa-size);
+}
+textarea, pre, code, kbd, samp {
+	font-family: var(--ppa-mono);
+	font-size: var(--ppa-size-sm);
+}
 body {
 	color: #f0f0f0;
 	background-color: #292929;
 	margin:	0;
 	padding: 0;
-	font-family: Arial;
-	font-size: 0.9em; /*0.8em;*/
+	font-family: var(--ppa-font);
+	font-size: var(--ppa-size);
+	line-height: 1.45;
 }
 body:not(.ppa-shell) > *, #ppa-main > * { margin-left: 20px }
 #ppa-sidebar {
 	background-color: #292929;
-	font-size: 0.9em;
+	font-size: var(--ppa-size);
 	border-right: 1px dashed #887f5c;
 	color: #fff;
 }
@@ -62,16 +80,15 @@ h1 {
 }
 h2 {
 	color: #fff;
-	font-size: 1em;
+	font-size: 1.4em;
 	font-weight: bold;
 	border: 2px solid #000000;
 	background-color: #000000;
 	padding: 2px 1em;
-	margin-top: 2em;
-	margin-bottom: 2em;
+	margin: 0 0 1ex 0;
 }
 h3 {
-	color: #111;
+	color: #ddd;
 	font-weight: bold;
 }
 table {
@@ -114,7 +131,6 @@ th.data {
 	color: #f0f0f0;
 	background-color: #292929;
 	border: 1px dotted #808080;
-	font-size: 0.9em;
 	padding: 3px 7px;
 }
 th.required {text-decoration: underline}
@@ -139,15 +155,14 @@ th.required {text-decoration: underline}
 nav.tabs {
 	width: 100%;
 	border-collapse: collapse;
-	margin: 20px 0 40px 0;
+	margin: 0 0 1ex 0;
 }
 .tab {
 	text-align: center;
 	vertical-align: top;
-	font-size: 0.8em;
 	border: 1px solid #808080;
 	background-color: #292929;
-	padding: 2px 10px;
+	padding: 4px 1ex;
 	white-space: nowrap;
 }
 .tab:hover {background-color: #595959}
@@ -176,7 +191,6 @@ ul.toplink li:first-child, ul.navlink li:first-child {
 }
 tr.data1, tr.data2, tr.data3 {
 	color: #f0f0f0;
-	font-size: 0.8em;
 	border: 1px dotted #808080;
 }
 tr.data1:hover, tr.data2:hover, tr.data3:hover {
@@ -248,3 +262,6 @@ div.logo a {
 .keyword {color: #cc7832}
 .literal {color: #3496a3}
 
+
+/* Destructive actions in lists */
+a.danger, .ppa-row-actions > a.danger { color: #ff8a80; }

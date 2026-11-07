@@ -13,12 +13,55 @@
 	if (!isset($msg)) $msg = '';
 	
 	/**
+	 * Checkboxes to pick roles, instead of a multiple select that needs
+	 * Ctrl+click and loses the choice on a stray click. The built-in pg_*
+	 * roles are folded away unless one of them is picked.
+	 * @param $name memberof, members or adminmembers ($_POST holds the picked ones)
+	 */
+	function printRoleChooser($name, $roles) {
+		global $lang;
+
+		$picked = isset($_POST[$name]) ? (array) $_POST[$name] : array();
+		$own = $builtin = array();
+		$roles->moveFirst();
+		while (!$roles->EOF) {
+			$rolename = $roles->fields['rolname'];
+			if (strncmp($rolename, 'pg_', 3) === 0) $builtin[] = $rolename;
+			else $own[] = $rolename;
+			$roles->moveNext();
+		}
+		$box = function ($list) use ($name, $picked) {
+			foreach ($list as $rolename) {
+				$v = htmlspecialchars($rolename);
+				echo "<label><input type=\"checkbox\" name=\"{$name}[]\" value=\"{$v}\"",
+					(in_array($rolename, $picked) ? ' checked="checked"' : ''), " /> {$v}</label>\n";
+			}
+		};
+		echo "<div class=\"role-chooser\">\n";
+		if ($own) $box($own);
+		else echo "<p class=\"hint\">", htmlspecialchars($lang['strnoownroles']), "</p>\n";
+		if ($builtin) {
+			$open = count(array_intersect($builtin, $picked)) > 0;
+			echo "<details", ($open ? ' open' : ''), "><summary>", htmlspecialchars(sprintf($lang['strbuiltinroles'], count($builtin))), "</summary>\n";
+			$box($builtin);
+			echo "</details>\n";
+		}
+		echo "</div>\n";
+	}
+
+	/**
 	 * Displays a screen for create a new role
 	 */
 	function doCreate($msg = '') {
 		global $data, $misc, $username;
 		global $lang;
 		
+		// A new role can log in and inherits privileges unless told
+		// otherwise: that is what "create a user" means to most people.
+		if (!isset($_POST['formRolename'])) {
+			$_POST['formInherits'] = 'on';
+			$_POST['formCanLogin'] = 'on';
+		}
 		if (!isset($_POST['formRolename'])) $_POST['formRolename'] = '';
 		if (!isset($_POST['formPassword'])) $_POST['formPassword'] = '';
 		if (!isset($_POST['formConfirm'])) $_POST['formConfirm'] = '';
@@ -64,40 +107,19 @@
 		if ($roles->recordCount() > 0) {
 			echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['strmemberof']}</th>\n";
 			echo "\t\t<td class=\"data\">\n";
-			echo "\t\t\t<select name=\"memberof[]\" multiple=\"multiple\" size=\"", min(20, $roles->recordCount()), "\">\n";
-			while (!$roles->EOF) {
-				$rolename = $roles->fields['rolname'];
-				echo "\t\t\t\t<option value=\"{$rolename}\"",
-				(in_array($rolename, $_POST['memberof']) ? ' selected="selected"' : ''), ">", $misc->printVal($rolename), "</option>\n";
-				$roles->moveNext();
-			}
-			echo "\t\t\t</select>\n";
+			printRoleChooser('memberof', $roles);
 			echo "\t\t</td>\n\t</tr>\n";
 			
 			$roles->moveFirst();
 			echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['strmembers']}</th>\n";
 			echo "\t\t<td class=\"data\">\n";
-			echo "\t\t\t<select name=\"members[]\" multiple=\"multiple\" size=\"", min(20, $roles->recordCount()), "\">\n";
-			while (!$roles->EOF) {
-				$rolename = $roles->fields['rolname'];
-				echo "\t\t\t\t<option value=\"{$rolename}\"",
-				(in_array($rolename, $_POST['members']) ? ' selected="selected"' : ''), ">", $misc->printVal($rolename), "</option>\n";
-				$roles->moveNext();
-			}
-			echo "\t\t\t</select>\n";
+			printRoleChooser('members', $roles);
 			echo "\t\t</td>\n\t</tr>\n";
 
 			$roles->moveFirst();
 			echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['stradminmembers']}</th>\n";
 			echo "\t\t<td class=\"data\">\n";
-			echo "\t\t\t<select name=\"adminmembers[]\" multiple=\"multiple\" size=\"", min(20, $roles->recordCount()), "\">\n";
-			while (!$roles->EOF) {
-				$rolename = $roles->fields['rolname'];
-				echo "\t\t\t\t<option value=\"{$rolename}\"",
-				(in_array($rolename, $_POST['adminmembers']) ? ' selected="selected"' : ''), ">", $misc->printVal($rolename), "</option>\n";
-				$roles->moveNext();
-			}
-			echo "\t\t\t</select>\n";
+			printRoleChooser('adminmembers', $roles);
 			echo "\t\t</td>\n\t</tr>\n";
 		}
 		
@@ -247,40 +269,19 @@
 			if ($roles->recordCount() > 0) {
 				echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['strmemberof']}</th>\n";
 				echo "\t\t<td class=\"data\">\n";
-				echo "\t\t\t<select name=\"memberof[]\" multiple=\"multiple\" size=\"", min(20, $roles->recordCount()), "\">\n";
-				while (!$roles->EOF) {
-					$rolename = $roles->fields['rolname'];
-					echo "\t\t\t\t<option value=\"{$rolename}\"",
-					(in_array($rolename, $_POST['memberof']) ? ' selected="selected"' : ''), ">", $misc->printVal($rolename), "</option>\n";
-					$roles->moveNext();
-				}
-				echo "\t\t\t</select>\n";
+				printRoleChooser('memberof', $roles);
 				echo "\t\t</td>\n\t</tr>\n";
 			
 				$roles->moveFirst();
 				echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['strmembers']}</th>\n";
 				echo "\t\t<td class=\"data\">\n";
-				echo "\t\t\t<select name=\"members[]\" multiple=\"multiple\" size=\"", min(20, $roles->recordCount()), "\">\n";
-				while (!$roles->EOF) {
-					$rolename = $roles->fields['rolname'];
-					echo "\t\t\t\t<option value=\"{$rolename}\"",
-					(in_array($rolename, $_POST['members']) ? ' selected="selected"' : ''), ">", $misc->printVal($rolename), "</option>\n";
-					$roles->moveNext();
-				}
-				echo "\t\t\t</select>\n";
+				printRoleChooser('members', $roles);
 				echo "\t\t</td>\n\t</tr>\n";
 
 				$roles->moveFirst();
 				echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['stradminmembers']}</th>\n";
 				echo "\t\t<td class=\"data\">\n";
-				echo "\t\t\t<select name=\"adminmembers[]\" multiple=\"multiple\" size=\"", min(20, $roles->recordCount()), "\">\n";
-				while (!$roles->EOF) {
-					$rolename = $roles->fields['rolname'];
-					echo "\t\t\t\t<option value=\"{$rolename}\"",
-					(in_array($rolename, $_POST['adminmembers']) ? ' selected="selected"' : ''), ">", $misc->printVal($rolename), "</option>\n";
-					$roles->moveNext();
-				}
-				echo "\t\t\t</select>\n";
+				printRoleChooser('adminmembers', $roles);
 				echo "\t\t</td>\n\t</tr>\n";
 			}
 			echo "</table>\n";
