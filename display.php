@@ -200,7 +200,7 @@
 						$extras['autocomplete'] = 'off';
 					}
 
-					echo $data->printField("values[{$attrs->fields['attname']}]", $rs->fields[$attrs->fields['attname']], $attrs->fields['type'], $extras);
+					echo $data->printField("values[{$attrs->fields['attname']}]", $rs->fields[$attrs->fields['attname']], $attrs->fields['type'], $extras, true);
 
 					echo "</td>";
 					$elements++;
@@ -255,8 +255,9 @@
 			if (!isset($_POST['values'])) $_POST['values'] = array();
 			if (!isset($_POST['nulls'])) $_POST['nulls'] = array();
 
+			// An empty number, date, JSON... field means NULL (see editRow)
 			$status = $data->editRow($_POST['table'], $_POST['values'], $_POST['nulls'],
-				$_POST['format'], $_POST['types'], $key);
+				$_POST['format'], $_POST['types'], $key, true);
 			if ($status == 0)
 				doBrowse($lang['strrowupdated']);
 			elseif ($status == -2)
@@ -297,8 +298,9 @@
 				echo "<br />\n";
 
 				echo "<input type=\"hidden\" name=\"action\" value=\"delrow\" />\n";
-				echo "<input type=\"submit\" name=\"yes\" value=\"{$lang['stryes']}\" />\n";
-				echo "<input type=\"submit\" name=\"no\" value=\"{$lang['strno']}\" />\n";
+				// Buttons that say what they do
+				echo "<input type=\"submit\" name=\"yes\" value=\"", htmlspecialchars($lang['strdeleterowbutton']), "\" />\n";
+				echo "<input type=\"submit\" name=\"no\" value=\"{$lang['strcancel']}\" />\n";
 			}
 			elseif ($rs->recordCount() != 1) {
 				echo "<p>{$lang['strrownotunique']}</p>\n";
@@ -708,6 +710,8 @@
 			$rs = -4;
 		}
 		if (is_object($rs)) $_REQUEST['page'] = $info['page'];
+		// The query itself is wrong (see browseQuery): the server's message about it
+		$query_error = ($rs === -6 && isset($info['error'])) ? $info['error'] : null;
 
 		// Build strings for GETs in array
 		$_gets = array(
@@ -750,6 +754,7 @@
 			SqlEditor::printResultsForm($query_sql, array(
 				'search_path' => isset($_REQUEST['search_path']) ? $_REQUEST['search_path'] : implode(',', $data->getSearchPath()),
 				'paginate' => true,
+				'error' => $query_error !== null ? SqlEditor::errorPosition($query_error) : null,
 			));
 		} else {
 			echo "<form method=\"post\" action=\"display.php\" class=\"sql-query-form\">\n";
@@ -771,6 +776,11 @@
 			SqlEditor::printTextarea($query, array('rows' => 3));
 			echo "<div><input type=\"submit\" value=\"", htmlspecialchars($lang['strexecute']), "\" /></div>\n";
 			echo "</form>\n";
+		}
+
+		if ($query_error !== null) {
+			echo "<table class=\"error sql-error\" role=\"alert\"><tr><td><p><b>{$lang['strsqlerror']}</b></p>",
+				$misc->printVal($query_error, 'errormsg'), "</td></tr></table>\n";
 		}
 
 		if (is_object($rs) && $rs->FieldCount() > 0) {
@@ -1007,7 +1017,7 @@
 				$misc->printPages($info['page'], $max_pages, $_gets, 20, $pages_opts);
 			}
 		}
-		else echo "<p>{$lang['strnodata']}</p>\n";
+		elseif ($query_error === null) echo "<p>{$lang['strnodata']}</p>\n";
 
 		// Navigation links
 		$navlinks = array();
@@ -1137,6 +1147,8 @@
 			'content' => $lang['strrefresh']
 		);
 
+		// Nothing to expand or refresh when the query failed
+		if ($query_error !== null) unset($navlinks['collapse'], $navlinks['refresh']);
 		$misc->printNavLinks($navlinks, 'display-browse', get_defined_vars());
 	}
 

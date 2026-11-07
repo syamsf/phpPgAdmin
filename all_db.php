@@ -385,6 +385,7 @@
 				'title' => $lang['strsize'],
 				'field' => field('dbsize'),
 				'type' => 'prettysize',
+				'class' => 'ppa-num',
 			),
 			'actions' => array(
 				'title' => $lang['stractions'],
@@ -449,7 +450,6 @@
 		if (!$data->hasDatabaseCollation()) unset($columns['lc_collate'], $columns['lc_ctype']);
 		if (!isset($data->privlist['database'])) unset($actions['privileges']);
 
-		$misc->printTable($databases, $columns, $actions, 'all_db-databases', $lang['strnodatabases']);
 
 		$navlinks = array (
 			'create' => array (
@@ -466,6 +466,7 @@
 			)
 		);
 		$misc->printNavLinks($navlinks, 'all_db-databases', get_defined_vars());
+		$misc->printTable($databases, $columns, $actions, 'all_db-databases', $lang['strnodatabases']);
 	}
 
 	function doTree() {

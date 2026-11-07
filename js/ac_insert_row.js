@@ -82,7 +82,11 @@ function openlist(e) {
 		contentType: 'application/x-www-form-urlencoded',
 		success: function (ret) {
 			jQuery.ppa.i = 0;
-			jQuery.ppa.fkbg.show();
+			/* nothing matches: no list, rather than an empty box */
+			if (!/class="acline"|class="errmsg"/.test(ret) && jQuery.ppa.o == 0) {
+				hideAc();
+				return;
+			}
 			with(jQuery.ppa.fklist) {
 				html(ret);
 				appendTo('#row_att_'+ attnum);
@@ -195,6 +199,17 @@ $(document).on('click', '#fknext', function () {
 	jQuery('#fklist').prev().focus();
 });
 
+/* close the list when pressing the mouse outside it or leaving the field
+ * with Tab; the click or the Tab still does what it would have done */
+$(document).on('mousedown', function (e) {
+	if (!jQuery.ppa || !jQuery.ppa.fklist || !jQuery.ppa.fklist.is(':visible')) return;
+	if (jQuery(e.target).closest('#fklist, .ac_field').length) return;
+	hideAc();
+});
+$(document).on('keydown', '.ac_field', function (e) {
+	if (e.keyCode == 9) hideAc();
+});
+
 /* Set up the page each time an insert/edit form with foreign keys is shown
  * (js/app.js fires "ppa:load" after swapping pages in). */
 function acInit() {
@@ -211,10 +226,9 @@ function acInit() {
 		o:0 // offset when navigating prev/next
 	};
 
-	/* close the list when clicking outside of it */
-	jQuery.ppa.fkbg.on('click', function (e) {
-		hideAc();
-	});
+	/* No full-page layer to catch clicks outside the list any more: it ate
+	 * the first click on Insert/Save. Close the list on the way instead and
+	 * let the click go where it was aimed. */
 
 	/* do not submit the form when selecting a value by pressing enter */
 	jQuery.ppa.attrs

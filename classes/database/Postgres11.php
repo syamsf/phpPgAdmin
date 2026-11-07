@@ -20,6 +20,14 @@ class Postgres11 extends Postgres {
 	}
 
 	/**
+	 * No pg_partition_tree() before 12: the partitions directly under it.
+	 */
+	function partitionedTableSizeSql($oid) {
+		return "(SELECT sum(pg_catalog.pg_total_relation_size(i.inhrelid))::bigint
+			FROM pg_catalog.pg_inherits i WHERE i.inhparent = {$oid})";
+	}
+
+	/**
 	 * Returns the current default_with_oids setting
 	 * @return default_with_oids setting
 	 */

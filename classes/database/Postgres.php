@@ -248,8 +248,12 @@ class Postgres extends ADODB_base {
 	 * @param $value The value of the field.  Note this could be 'numeric(7,2)' sort of thing...
 	 * @param $type The database type of the field
 	 * @param $extras An array of attributes name as key and attributes' values as value
+	 * @param $rich (optional) True for the fields of a row (insert, edit): enum
+	 *        columns get a list of their values, dates and times the browser's
+	 *        date and time inputs. Not for search forms, where "LIKE 'pa%'"
+	 *        and the like must stay possible.
 	 */
-	function printField($name, $value, $type, $extras = array()) {
+	function printField($name, $value, $type, $extras = array(), $rich = false) {
 		global $lang;
 
 		// Determine actions string
@@ -257,6 +261,8 @@ class Postgres extends ADODB_base {
 		foreach ($extras as $k => $v) {
 			$extra_str .= " {$k}=\"" . htmlspecialchars($v ?? '') . "\"";
 		}
+
+		if ($rich && $this->printRichField($name, $value, (string) $type, $extra_str)) return;
 
 		switch (substr($type,0,9)) {
 			case 'bool':
@@ -311,6 +317,92 @@ class Postgres extends ADODB_base {
 				echo "<input name=\"", htmlspecialchars($name ?? ''), "\" value=\"", htmlspecialchars($value ?? ''), "\" size=\"35\"{$extra_str} />\n";
 				break;
 		}
+	}
+
+	/**
+	 * printField() for enum, date and time columns, see there.  These inputs
+	 * only take a plain value, so they carry data-ppa-plain: js/app.js turns
+	 * them into a text box when "Entered as" is switched to SQL expression.
+	 * @return true if it printed the field, false to print a plain one
+	 */
+	function printRichField($name, $value, $type, $extra_str) {
+		$value = $value === null ? '' : (string) $value;
+		$n = htmlspecialchars($name ?? '');
+
+		$labels = $this->getEnumLabels($type);
+		if ($labels !== null) {
+			// A value that isn't a label (an expression): a text box
+			if ($value !== '' && !in_array($value, $labels, true)) return false;
+			echo "<select name=\"{$n}\" data-ppa-plain=\"1\"{$extra_str}>\n";
+			echo "<option value=\"\"", ($value === '' ? ' selected="selected"' : ''), "></option>\n";
+			foreach ($labels as $label) {
+				echo "<option value=\"", htmlspecialchars($label), "\"",
+					($label === $value ? ' selected="selected"' : ''), ">", htmlspecialchars($label), "</option>\n";
+			}
+			echo "</select>\n";
+			return true;
+		}
+
+		/* The browser's inputs only take these forms; anything else (time
+		 * zones, microseconds, BC, infinity, now()) stays a text box so
+		 * nothing is lost. */
+		switch ($type) {
+			case 'date':
+				$input = 'date';
+				$ok = '/^\d{4}-\d{2}-\d{2}$/';
+				break;
+			case 'timestamp without time zone':
+			case 'timestamp(0) without time zone':
+			case 'timestamp(1) without time zone':
+			case 'timestamp(2) without time zone':
+			case 'timestamp(3) without time zone':
+				$input = 'datetime-local';
+				$ok = '/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/';
+				break;
+			case 'time without time zone':
+			case 'time(0) without time zone':
+			case 'time(1) without time zone':
+			case 'time(2) without time zone':
+			case 'time(3) without time zone':
+				$input = 'time';
+				$ok = '/^\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/';
+				break;
+			default:
+				return false;
+		}
+		if ($value !== '' && !preg_match($ok, $value)) return false;
+		if ($input == 'datetime-local') $value = str_replace(' ', 'T', $value);
+		$step = $input == 'date' ? '' : ' step="0.001"';
+		echo "<input type=\"{$input}\" name=\"{$n}\" value=\"", htmlspecialchars($value), "\"{$step} data-ppa-plain=\"1\"{$extra_str} />\n";
+		return true;
+	}
+
+	/**
+	 * The values of an enum type, in their order.
+	 * @param $type A type name as format_type() gives it
+	 * @return array of labels, or null if it isn't an enum
+	 */
+	function getEnumLabels($type) {
+		static $cache = array();
+		$type = trim((string) $type);
+		if ($type === '' || $type === 'fktype') return null;
+		if (array_key_exists($type, $cache)) return $cache[$type];
+		// Built-in types are no enums: don't ask the server about them
+		if (preg_match('/^(smallint|integer|bigint|numeric|real|double precision|text|character|boolean|date|time|interval|json|jsonb|uuid|bytea|inet|cidr|macaddr|money|oid|xml|tsvector|point|"char"|name)\b/', $type))
+			return $cache[$type] = null;
+		$t = $type;
+		$this->clean($t);
+		$rs = $this->selectSet("SELECT e.enumlabel FROM pg_catalog.pg_enum e
+			WHERE e.enumtypid = pg_catalog.to_regtype('{$t}') ORDER BY e.enumsortorder");
+		$labels = null;
+		if (is_object($rs) && $rs->recordCount() > 0) {
+			$labels = array();
+			while (!$rs->EOF) {
+				$labels[] = $rs->fields['enumlabel'];
+				$rs->moveNext();
+			}
+		}
+		return $cache[$type] = $labels;
 	}
 
 	/**
@@ -1119,13 +1211,20 @@ class Postgres extends ADODB_base {
 					WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
 					ORDER BY schemaname, tablename";
 		} else {
+			$partsize = $this->partitionedTableSizeSql('c.oid');
 			$sql = "SELECT c.relname, pg_catalog.pg_get_userbyid(c.relowner) AS relowner,
 						pg_catalog.obj_description(c.oid, 'pg_class') AS relcomment,
 						-- -1 (PostgreSQL 14+) or 0 with no pages: never analyzed, unknown
 						CASE WHEN c.reltuples < 0 OR (c.reltuples = 0 AND c.relpages = 0) THEN NULL
 							ELSE c.reltuples::bigint END AS reltuples,
-						CASE c.relkind WHEN 'm' THEN '[MV]' WHEN 'f' THEN '[FDW]@'||n.nspname ELSE (SELECT spcname FROM pg_catalog.pg_tablespace pt
-							WHERE pt.oid=c.reltablespace) END AS tablespace
+						(SELECT spcname FROM pg_catalog.pg_tablespace pt WHERE pt.oid=c.reltablespace) AS tablespace,
+						c.relkind,
+						-- Table, indexes and TOAST; a partitioned table has its
+						-- data in its partitions
+						CASE WHEN c.relkind = 'p' THEN {$partsize}
+						WHEN c.relkind IN ('r', 'm') THEN pg_catalog.pg_total_relation_size(c.oid)
+						END AS relsize,
+						CASE WHEN c.relkind IN ('r', 'm') THEN pg_catalog.pg_relation_size(c.oid) END AS heapsize
 					FROM pg_catalog.pg_class c
 					LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 					WHERE c.relkind IN ('r', 'm', 'f', 'p')
@@ -1134,6 +1233,43 @@ class Postgres extends ADODB_base {
 		}
 
 		return $this->selectSet($sql);
+	}
+
+	/**
+	 * SQL for the size of a partitioned table: all its partitions with
+	 * their indexes, see getTables().
+	 * @param $oid SQL for the table's oid
+	 */
+	function partitionedTableSizeSql($oid) {
+		return "(SELECT sum(pg_catalog.pg_total_relation_size(pt.relid))::bigint
+			FROM pg_catalog.pg_partition_tree({$oid}) pt)";
+	}
+
+	/**
+	 * Counts the rows of a table, but gives up (null) rather than wait for a
+	 * lock or take long, and says nothing about it: for the tables list,
+	 * where the count of a small table nobody has analyzed yet beats "-".
+	 * @param $table A table in the current schema
+	 * @return The number of rows, or null
+	 */
+	function countRowsQuietly($table) {
+		$c_schema = $this->_schema;
+		$this->fieldClean($c_schema);
+		$this->fieldClean($table);
+
+		$raise = $this->conn->raiseErrorFn;
+		$this->conn->raiseErrorFn = false;
+		$n = null;
+		if ($this->beginTransaction() == 0) {
+			if ($this->execute("SET LOCAL lock_timeout = '200ms'") == 0
+				&& $this->execute("SET LOCAL statement_timeout = '2s'") == 0) {
+				$v = $this->selectField("SELECT count(*) AS n FROM \"{$c_schema}\".\"{$table}\"", 'n');
+				if (is_numeric($v) && $v >= 0) $n = (int) $v;
+			}
+			$this->rollbackTransaction();
+		}
+		$this->conn->raiseErrorFn = $raise;
+		return $n;
 	}
 
 	/**
@@ -2586,6 +2722,18 @@ class Postgres extends ADODB_base {
 	}
 
 	/**
+	 * Types where an empty string is a real value. For other types ('' is not
+	 * a number, date or JSON) an empty form field can only mean "no value",
+	 * see insertRow() and editRow().
+	 * @param $type A type name as given by getTableAttributes()
+	 */
+	function isTextLikeType($type) {
+		$base = strtolower(trim(preg_replace('/\(.*$/', '', (string) $type)));
+		return in_array($base, array('text', 'character varying', 'varchar', 'character',
+			'char', 'bpchar', 'name', 'citext', '"char"'), true);
+	}
+
+	/**
 	 * Adds a new row to a table
 	 * @param $table The table in which to insert
 	 * @param $fields Array of given field in values
@@ -2593,10 +2741,16 @@ class Postgres extends ADODB_base {
 	 * @param $nulls An array mapping column => something if it is to be null
 	 * @param $format An array of the data type (VALUE or EXPRESSION)
 	 * @param $types An array of field types
+	 * @param $notnulls (optional) An array mapping column => something if the
+	 *        column is NOT NULL. When given, $fields and $values are matched
+	 *        by key, and a field left empty (as a plain value) is left out of
+	 *        the INSERT so the column gets its default, NULL if it has none.
+	 *        Only an empty text value for a NOT NULL column is kept as ''.
+	 *        Without it, empty fields are sent as empty strings.
 	 * @return 0 success
 	 * @return -1 invalid parameters
 	 */
-	function insertRow($table, $fields, $values, $nulls, $format, $types) {
+	function insertRow($table, $fields, $values, $nulls, $format, $types, $notnulls = null) {
 		if (!is_array($fields) || !is_array($values) || !is_array($nulls)
 			|| !is_array($format) || !is_array($types)
 			|| (count($fields) != count($values))
@@ -2606,6 +2760,34 @@ class Postgres extends ADODB_base {
 		else {
 			// Build clause
 			if (count($values) > 0) {
+				$f_schema = $this->_schema;
+				$this->fieldClean($table);
+				$this->fieldClean($f_schema);
+
+				if (is_array($notnulls)) {
+					$cols = array();
+					$vals = array();
+					foreach ($values as $i => $value) {
+						if (!isset($fields[$i])) return -1;
+						$isNull = isset($nulls[$i]);
+						$fmt = $format[$i] ?? 'VALUE';
+						$type = $types[$i] ?? '';
+						if (!$isNull && $fmt == 'VALUE' && (string) $value === ''
+							&& !(isset($notnulls[$i]) && $this->isTextLikeType($type))) {
+							continue;
+						}
+						$field = $fields[$i];
+						$cols[] = $this->fieldClean($field);
+						$vals[] = $isNull ? 'NULL' : $this->formatValue($type, $fmt, $value);
+					}
+					if (count($cols) == 0)
+						$sql = "INSERT INTO \"{$f_schema}\".\"{$table}\" DEFAULT VALUES";
+					else
+						$sql = "INSERT INTO \"{$f_schema}\".\"{$table}\" (\"". implode('","', $cols) ."\")
+					VALUES (". implode(',', $vals) .")";
+					return $this->execute($sql);
+				}
+
 				// Escape all field names
 				$clean_fields = array();
 
@@ -2614,11 +2796,6 @@ class Postgres extends ADODB_base {
 				}
 
 				$fields = $clean_fields;
-
-				$f_schema = $this->_schema;
-				$this->fieldClean($table);
-				$this->fieldClean($f_schema);
-
 
 				$sql = '';
 				foreach($values as $i => $value) {
@@ -2647,10 +2824,13 @@ class Postgres extends ADODB_base {
 	 * @param $format An array of the data type (VALUE or EXPRESSION)
 	 * @param $types An array of field types
 	 * @param $keyarr An array mapping column => value to update
+	 * @param $blankAsNull (optional) When true, a field left empty (as a plain
+	 *        value) of a type where '' is not a value (see isTextLikeType())
+	 *        is set to NULL instead of failing on ''.
 	 * @return 0 success
 	 * @return -1 invalid parameters
 	 */
-	function editRow($table, $vars, $nulls, $format, $types, $keyarr) {
+	function editRow($table, $vars, $nulls, $format, $types, $keyarr, $blankAsNull = false) {
 		if (!is_array($vars) || !is_array($nulls) || !is_array($format) || !is_array($types))
 			return -1;
 		else {
@@ -2666,6 +2846,8 @@ class Postgres extends ADODB_base {
 
 					// Handle NULL values
 					if (isset($nulls[$key])) $tmp = 'NULL';
+					elseif ($blankAsNull && ($format[$key] ?? 'VALUE') == 'VALUE' && (string) $value === ''
+						&& !$this->isTextLikeType($types[$key] ?? '')) $tmp = 'NULL';
 					else $tmp = $this->formatValue($types[$key], $format[$key], $value);
 
 					if (isset($sql)) $sql .= ", \"{$key}\"={$tmp}";
@@ -8053,6 +8235,18 @@ class Postgres extends ADODB_base {
 			}
 		}
 
+		// A query that doesn't parse or refers to something missing fails
+		// below inside "SELECT * FROM (...) AS sub LIMIT ...", and the error
+		// would point into that.  Check it as typed first.
+		if ($type != 'TABLE') {
+			$problem = $this->checkQuery($query);
+			if ($problem !== null) {
+				$this->rollbackTransaction();
+				$info['error'] = $problem;
+				return -6;
+			}
+		}
+
 		// Quick filters.  Only filter on columns the query really returns, and only
 		// once: a duplicated name can't be told apart in the WHERE clause.
 		$where = array();
@@ -8202,6 +8396,23 @@ class Postgres extends ADODB_base {
 		$info['has_next'] = ($info['total_type'] == 'exact') ? ($page < $max_pages) : ($rs->recordCount() > $page_size);
 
 		return $rs;
+	}
+
+	/**
+	 * Parses and plans a query without running it (a protocol-level
+	 * prepare of the unnamed statement), to report its errors as they
+	 * concern the query as written.
+	 * @param $query One SQL statement
+	 * @return null if the query is fine, or the server's error message
+	 */
+	function checkQuery($query) {
+		$conn = $this->conn->_connectionID ?? null;
+		if (!$conn || !function_exists('pg_prepare')) return null;
+		// Failing is the point here: no PHP warning for it
+		$res = @pg_prepare($conn, '', $query);
+		if ($res !== false) return null;
+		$msg = trim((string) pg_last_error($conn));
+		return $msg !== '' ? $msg : null;
 	}
 
 	/**

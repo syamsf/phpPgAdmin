@@ -32,6 +32,9 @@
 
 	var ppa = window.ppa = window.ppa || {};
 
+	// For styles that only apply with this script running (the bulk bar).
+	document.documentElement.classList.add('ppa-js');
+
 	var loadedScripts = {};
 	var postPages = {};       // history id -> html of pages that came from a POST
 	var postOrder = [];
@@ -779,6 +782,89 @@
 			if (marked && !root.querySelector('[autofocus]')) cancel.focus({ preventScroll: true });
 		}
 	}
+
+	// Row forms (insert, edit): an enum's list of values or a date/time
+	// input (data-ppa-plain, see Postgres::printRichField) only takes a
+	// plain value. With "Entered as: SQL expression" it becomes a text box,
+	// and goes back when switched back.
+	function plainField(row) {
+		return row.querySelector('[data-ppa-plain]');
+	}
+	function setEnteredAs(select) {
+		var row = select.closest('tr');
+		if (!row) return;
+		var expr = select.value === 'EXPRESSION';
+		var field = plainField(row);
+		var text = row.querySelector('input[data-ppa-expr]');
+		if (expr && field) {
+			text = document.createElement('input');
+			text.type = 'text';
+			text.size = 35;
+			text.name = field.name;
+			text.value = field.value;
+			text.setAttribute('data-ppa-expr', '1');
+			['onchange', 'id', 'autocomplete'].forEach(function (a) {
+				if (field.hasAttribute(a)) text.setAttribute(a, field.getAttribute(a));
+			});
+			text.ppaPlain = field;
+			field.parentNode.replaceChild(text, field);
+		} else if (!expr && text && text.ppaPlain) {
+			field = text.ppaPlain;
+			field.value = text.value;   // kept if it fits, else left empty
+			text.parentNode.replaceChild(field, text);
+		}
+	}
+	document.addEventListener('change', function (e) {
+		var t = e.target;
+		if (t && t.matches && t.matches('select[name^="format["]')) setEnteredAs(t);
+	});
+	document.addEventListener('ppa:load', function () {
+		document.querySelectorAll('select[name^="format["]').forEach(function (s) {
+			if (s.value === 'EXPRESSION') setEnteredAs(s);
+		});
+	});
+
+	// Lists with checkboxes (Misc::printTable): the bar with the actions for
+	// the ticked rows shows once a row is ticked, and says how many are.
+	function updateBulk(form) {
+		var boxes = form.querySelectorAll('input[name="ma[]"]');
+		var n = 0;
+		boxes.forEach(function (b) { if (b.checked) n++; });
+		var bar = form.querySelector('.ppa-bulkbar');
+		if (bar) {
+			bar.classList.toggle('ppa-bulk-active', n > 0);
+			// It stays at the bottom of the screen over the list: not see-through
+			bar.style.backgroundColor = bodyBackground();
+		}
+		var count = form.querySelector('.ppa-bulk-count');
+		if (count) count.textContent = n === 1 ? count.getAttribute('data-one') : count.getAttribute('data-many').replace('%d', n);
+		var all = form.querySelector('.ppa-bulk-all');
+		if (all) {
+			all.checked = n > 0 && n === boxes.length;
+			all.indeterminate = n > 0 && n < boxes.length;
+		}
+	}
+	document.addEventListener('change', function (e) {
+		var t = e.target;
+		var form = t && t.closest ? t.closest('form.ppa-bulk-form') : null;
+		if (!form) return;
+		if (t.classList.contains('ppa-bulk-all')) {
+			form.querySelectorAll('input[name="ma[]"]').forEach(function (b) { b.checked = t.checked; });
+		}
+		updateBulk(form);
+	});
+	document.addEventListener('click', function (e) {
+		var t = e.target;
+		if (!t || !t.classList || !t.classList.contains('ppa-bulk-clear')) return;
+		var form = t.closest('form.ppa-bulk-form');
+		if (!form) return;
+		form.querySelectorAll('input[name="ma[]"]').forEach(function (b) { b.checked = false; });
+		updateBulk(form);
+	});
+	document.addEventListener('ppa:load', function () {
+		// Boxes the browser kept ticked when going back to the page
+		document.querySelectorAll('form.ppa-bulk-form').forEach(updateBulk);
+	});
 
 	// "back to top" only shows once there is a top to go back to.
 	function markScrolled() {

@@ -681,7 +681,6 @@
 			),
 		);
 		
-		$misc->printTable($roles, $columns, $actions, 'roles-roles', $lang['strnoroles']);
 
 		$navlinks = array (
 			'create' => array (
@@ -698,6 +697,7 @@
 			)
 		);
 		$misc->printNavLinks($navlinks, 'roles-roles', get_defined_vars());
+		$misc->printTable($roles, $columns, $actions, 'roles-roles', $lang['strnoroles']);
 	}
 
 	$misc->printHeader($lang['strroles']);

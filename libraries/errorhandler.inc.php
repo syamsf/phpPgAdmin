@@ -74,7 +74,9 @@ function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
 		$s = "<p><b>{$lang['strsqlerror']}</b><br />" . $misc->printVal($errmsg,'errormsg') . "</p>
 		      <p><b>{$lang['strinstatement']}</b><br />" . $misc->printVal($sql) . "</p>
 		";
-		echo "<table class=\"error\" cellpadding=\"5\"><tr><td>{$s}</td></tr></table><br />\n";
+		$box = "<table class=\"error\" role=\"alert\" cellpadding=\"5\"><tr><td>{$s}</td></tr></table>\n";
+		if (isset($misc) && method_exists($misc, 'showError')) $misc->showError($box);
+		else echo $box;
 
 		break;
 
@@ -85,6 +87,9 @@ function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
 		$_reload_browser = true;
 		unset($_SESSION['sharedUsername']);
 		unset($_SESSION['sharedPassword']);
+		// Keep the name that was tried for the form (login.php): the login
+		// was posted, then redirected, so it isn't in $_POST any more.
+		$loginUsername = $_SESSION['webdbLogin'][$_REQUEST['server'] ?? '']['username'] ?? '';
 		unset($_SESSION['webdbLogin'][$_REQUEST['server']]);
 		$msg = $lang['strloginfailed'];
 		// ADOdb only keeps "Database connection failed"; the server's own
@@ -98,7 +103,9 @@ function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
 		break;
 	default:
 		$s = htmlspecialchars("$dbms error: [$errno: $errmsg] in $fn(" . (is_scalar($p1) ? $p1 : '') . ", " . (is_scalar($p2) ? $p2 : '') . ")") . "\n";
-		echo "<table class=\"error\" cellpadding=\"5\"><tr><td>{$s}</td></tr></table><br />\n";
+		$box = "<table class=\"error\" role=\"alert\" cellpadding=\"5\"><tr><td>{$s}</td></tr></table>\n";
+		if (isset($misc) && method_exists($misc, 'showError')) $misc->showError($box);
+		else echo $box;
 		break;
 	}
 	/*

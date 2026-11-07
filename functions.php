@@ -922,7 +922,6 @@
 			),
 		);
 
-		$misc->printTable($funcs, $columns, $actions, 'functions-functions', $lang['strnofunctions']);
 
 		$navlinks = array(
 			'createpl' => array (
@@ -972,6 +971,7 @@
 		);
 
 		$misc->printNavLinks($navlinks, 'functions-functions', get_defined_vars());
+		$misc->printTable($funcs, $columns, $actions, 'functions-functions', $lang['strnofunctions']);
 	}
 
 	/**

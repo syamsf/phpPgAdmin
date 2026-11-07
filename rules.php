@@ -165,7 +165,6 @@
 			),
 		);
 
-		$misc->printTable($rules, $columns, $actions, 'rules-rules', $lang['strnorules']);
 
 		$misc->printNavLinks(array ('create' => array (
 				'attr'=> array (
@@ -183,6 +182,7 @@
 				),
 				'content' => $lang['strcreaterule']
 			)), 'rules-rules', get_defined_vars());
+		$misc->printTable($rules, $columns, $actions, 'rules-rules', $lang['strnorules']);
 	}
 
 	function doTree() {

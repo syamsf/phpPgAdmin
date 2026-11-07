@@ -396,6 +396,7 @@
 					$out = $params['function']($str, $params);
 					break;
 				case 'prettysize':
+					// A no-break space: "7678 kB" stays on one line
 					if (!is_numeric($str))
 						$out = htmlspecialchars($str);
 					elseif ($str == -1)
@@ -405,27 +406,27 @@
 						$limit = 10 * 1024;
 						$mult = 1;
 						if ($str < $limit * $mult)
-							$out = $str.' '.$lang['strbytes'];
+							$out = $str."\u{00A0}".$lang['strbytes'];
 						else
 						{
 							$mult *= 1024;
 							if ($str < $limit * $mult)
-								$out = floor(($str + $mult / 2) / $mult).' '.$lang['strkb'];
+								$out = floor(($str + $mult / 2) / $mult)."\u{00A0}".$lang['strkb'];
 							else
 							{
 								$mult *= 1024;
 								if ($str < $limit * $mult)
-									$out = floor(($str + $mult / 2) / $mult).' '.$lang['strmb'];
+									$out = floor(($str + $mult / 2) / $mult)."\u{00A0}".$lang['strmb'];
 								else
 								{
 									$mult *= 1024;
 									if ($str < $limit * $mult)
-										$out = floor(($str + $mult / 2) / $mult).' '.$lang['strgb'];
+										$out = floor(($str + $mult / 2) / $mult)."\u{00A0}".$lang['strgb'];
 									else
 									{
 										$mult *= 1024;
 										if ($str < $limit * $mult)
-											$out = floor(($str + $mult / 2) / $mult).' '.$lang['strtb'];
+											$out = floor(($str + $mult / 2) / $mult)."\u{00A0}".$lang['strtb'];
 									}
 								}
 							}
@@ -488,6 +489,7 @@
 			echo "<h2>";
 			$this->printHelp($title, $help);
 			echo "</h2>\n";
+			$this->flushErrors();
 		}
 
 		/**
@@ -495,9 +497,37 @@
 		 * @param $msg The message to print
 		 */
 		function printMsg($msg) {
+			$this->flushErrors();
 			if ($msg == '') return;
 			$error = $this->isErrorMessage($msg);
 			echo "<p class=\"message", ($error ? ' error' : ''), "\" role=\"", ($error ? 'alert' : 'status'), "\">{$msg}</p>\n";
+		}
+
+		/** SQL errors raised before the page content started, see showError(). */
+		private $pendingErrors = array();
+		/** True once the breadcrumb trail is out: the page content has started. */
+		private $trailPrinted = false;
+
+		/**
+		 * Prints an error box. Errors raised while a page is still working
+		 * out what to show (say a failed INSERT, before the form is shown
+		 * again with "Row insert failed.") would otherwise land above the
+		 * page header; they are held back until the tabs or the page title
+		 * are out, see flushErrors().
+		 */
+		function showError($html) {
+			if (!$this->trailPrinted) {
+				$this->pendingErrors[] = $html;
+				return;
+			}
+			$this->flushErrors();
+			echo $html;
+		}
+
+		/** Prints the errors held back by showError(). */
+		function flushErrors() {
+			foreach ($this->pendingErrors as $html) echo $html;
+			$this->pendingErrors = array();
 		}
 
 		/** Messages from the language file that report a failure, see isErrorMessage(). */
@@ -723,6 +753,7 @@
 			global $_reload_browser, $_reload_drop_database;
 			global $lang, $_no_bottom_link;
 
+			$this->flushErrors();
 			if ($doBody) {
 				// A full page load builds the tree from scratch anyway, so
 				// only a swapped-in page has to ask for a refresh.
@@ -884,6 +915,9 @@
 
 			echo "<nav class=\"tabs\" aria-label=\"", htmlspecialchars($lang['strsections']), "\"><ul>\n";
 
+			// Rarely used tabs ('more') go in a "More" menu at the end, unless
+			// it's the page being shown.
+			$more = array();
 			foreach ($tabs as $tab_id => $tab) {
 				$isActive = ($tab_id == $activetab);
 
@@ -897,6 +931,11 @@
 
 					$tablink .= "<span class=\"label\">{$tab['title']}</span></a>";
 
+					if (!empty($tab['more']) && !$isActive) {
+						$more[] = $tablink;
+						continue;
+					}
+
 					echo "<li class=\"tab", ($isActive ? ' active' : ''), "\">";
 
 					// No "?" help marker on tabs: the page title has one.
@@ -906,7 +945,14 @@
 				}
 			}
 
+			if ($more) {
+				$label = htmlspecialchars($lang['strmoretabs']);
+				echo "<li class=\"tab ppa-tab-more\"><details class=\"ppa-menu\"><summary>{$label} &#x25BE;</summary>",
+					"<div class=\"ppa-menu-list\">", implode('', $more), "</div></details></li>\n";
+			}
+
 			echo "</ul></nav>\n";
+			$this->flushErrors();
 		}
 
 		/**
@@ -1070,6 +1116,7 @@
 							'icon'  => 'Privileges',
 						),
 						'languages' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['strlanguages'],
 							'url'   => 'languages.php',
 							'urlvars' => array('subject' => 'database'),
@@ -1078,6 +1125,7 @@
 							'icon'  => 'Languages',
 						),
 						'casts' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['strcasts'],
 							'url'   => 'casts.php',
 							'urlvars' => array('subject' => 'database'),
@@ -1142,6 +1190,7 @@
 							'icon'  => 'Domains',
 						),
 						'aggregates' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['straggregates'],
 							'url'   => 'aggregates.php',
 							'urlvars' => array('subject' => 'schema'),
@@ -1158,6 +1207,7 @@
 							'icon'  => 'Types',
 						),
 						'operators' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['stroperators'],
 							'url'   => 'operators.php',
 							'urlvars' => array('subject' => 'schema'),
@@ -1166,6 +1216,7 @@
 							'icon'  => 'Operators',
 						),
 						'opclasses' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['stropclasses'],
 							'url'   => 'opclasses.php',
 							'urlvars' => array('subject' => 'schema'),
@@ -1174,6 +1225,7 @@
 							'icon'  => 'OperatorClasses',
 						),
 						'conversions' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['strconversions'],
 							'url'   => 'conversions.php',
 							'urlvars' => array('subject' => 'schema'),
@@ -1259,6 +1311,7 @@
 							'branch'=> true,
 						),
 						'rules' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['strrules'],
 							'url'   => 'rules.php',
 							'urlvars' => array('subject' => 'table', 'table' => field('table')),
@@ -1336,6 +1389,7 @@
 							'icon'  => 'Definition'
 						),
 						'rules' => array (
+							'more'  => true,   // rarely used: under "More"
 							'title' => $lang['strrules'],
 							'url'   => 'rules.php',
 							'urlvars' => array('subject' => 'view', 'view' => field('view')),
@@ -1662,11 +1716,16 @@
 				// No "?" help marker in the trail: it only added noise.
 				echo $crumblink;
 
-				echo "<span class=\"sep\" aria-hidden=\"true\">{$lang['strseparator']}</span>";
+				// "Test › ppa_test › shop", with nothing after the last one
+				if ($n < $last) {
+					$sep = (strcasecmp($lang['applangdir'] ?? 'ltr', 'rtl') == 0) ? "\u{2039}" : "\u{203A}";
+					echo "<span class=\"sep\" aria-hidden=\"true\">{$sep}</span>";
+				}
 				echo "</li>";
 			}
 
 			echo "</ol></nav>\n";
+			$this->trailPrinted = true;
 		}
 
 		/**
@@ -1836,7 +1895,30 @@
 			$plugin_manager->do_hook('navlinks', $plugin_functions_parameters);
 
 			if (count($navlinks) > 0) {
-				$this->printLinksList($navlinks, 'navlink');
+				// A bar of buttons. Actions that destroy something (Empty,
+				// Drop...) come last, set apart and in red, like in lists.
+				$safe = array();
+				$danger = array();
+				foreach ($navlinks as $key => $link) {
+					if (preg_match(self::DANGER_ACTIONS, (string) $key)) {
+						$link['attr']['class'] = trim(($link['attr']['class'] ?? '') . ' danger');
+						$danger[] = $link;
+					} else {
+						$safe[] = $link;
+					}
+				}
+				echo "<ul class=\"navlink ppa-actionbar\">\n";
+				foreach ($safe as $link) {
+					echo "\t<li>";
+					$this->printLink($link);
+					echo "</li>\n";
+				}
+				foreach ($danger as $i => $link) {
+					echo "\t<li", ($i == 0 && $safe ? ' class="ppa-actionbar-danger"' : ''), ">";
+					$this->printLink($link);
+					echo "</li>\n";
+				}
+				echo "</ul>\n";
 			}
 		}
 
@@ -2231,8 +2313,7 @@
 				}
 
 				if ($ma !== null) {
-					echo "<script src=\"", htmlspecialchars($this->asset('multiactionform.js')), "\"></script>\n";
-					echo "<form id=\"multi_form\" action=\"", htmlspecialchars($ma['url']), "\" method=\"post\" enctype=\"multipart/form-data\">\n";
+					echo "<form id=\"multi_form\" class=\"ppa-bulk-form\" action=\"", htmlspecialchars($ma['url']), "\" method=\"post\" enctype=\"multipart/form-data\">\n";
 					echo $this->csrfField();
 					if (isset($ma['vars']))
 						foreach ($ma['vars'] as $k => $v)
@@ -2243,7 +2324,10 @@
 				echo "<tr>\n";
 
 				// Display column headings
-				if ($ma !== null) echo "<th></th>";
+				if ($ma !== null) {
+					$label = htmlspecialchars($lang['strselectallrows']);
+					echo "<th class=\"ppa-bulk-check\"><input type=\"checkbox\" class=\"ppa-bulk-all\" title=\"{$label}\" aria-label=\"{$label}\" /></th>";
+				}
 				foreach ($columns as $column_id => $column) {
 					// Optional extra CSS class for this column's heading ('class' key)
 					$class = ($column['class'] ?? '') !== '' ? " {$column['class']}" : '';
@@ -2333,34 +2417,29 @@
 				}
 				echo "</table>\n";
 
-				// Multi action table footer w/ options & [un]check'em all
+				/* Actions for the ticked rows: a bar that shows up once a row
+				 * is ticked (js/app.js), one button per action, the ones that
+				 * destroy something last and in red. */
 				if ($ma !== null) {
-					// if default is not set or doesn't exist, set it to null
-					if (!isset($ma['default']) || !isset($actions[$ma['default']]))
-						$ma['default'] = null;
-					echo "<br />\n";
-					echo "<table>\n";
-					echo "<tr>\n";
-					echo "<th class=\"data\" style=\"text-align: left\" colspan=\"3\">{$lang['stractionsonmultiplelines']}</th>\n";
-					echo "</tr>\n";
-					echo "<tr class=\"row1\">\n";
-					echo "<td>";
-					echo "<a href=\"#\" onclick=\"javascript:checkAll(true);\">{$lang['strselectall']}</a> / ";
-					echo "<a href=\"#\" onclick=\"javascript:checkAll(false);\">{$lang['strunselectall']}</a></td>\n";
-					echo "<td>&nbsp;--->&nbsp;</td>\n";
-					echo "<td>\n";
-					echo "\t<select name=\"action\">\n";
-					if ($ma['default'] == null)
-						echo "\t\t<option value=\"\">--</option>\n";
-					foreach($actions as $k => $a)
-						if (isset($a['multiaction']))
-							echo "\t\t<option value=\"{$a['multiaction']}\"", ($ma['default']  == $k? ' selected="selected"': ''), ">{$a['content']}</option>\n";
-					echo "\t</select>\n";
-					echo "<input type=\"submit\" value=\"{$lang['strexecute']}\" />\n";
+					$safe = array();
+					$danger = array();
+					foreach ($actions as $k => $a) {
+						if (!isset($a['multiaction'])) continue;
+						if (preg_match(self::DANGER_ACTIONS, (string) $k)) $danger[] = $a;
+						else $safe[] = $a;
+					}
+					echo "<div class=\"ppa-bulkbar\" role=\"group\" aria-label=\"", htmlspecialchars($lang['strbulkactions']), "\">\n";
+					echo "<span class=\"ppa-bulk-count\" aria-live=\"polite\" data-one=\"", htmlspecialchars($lang['strrowselected']),
+						"\" data-many=\"", htmlspecialchars($lang['strrowsselected']), "\">",
+						htmlspecialchars(sprintf($lang['strrowsselected'], 0)), "</span>\n";
+					foreach ($safe as $a)
+						echo "<button type=\"submit\" name=\"action\" value=\"", htmlspecialchars($a['multiaction']), "\">{$a['content']}</button>\n";
+					foreach ($danger as $n => $a)
+						echo "<button type=\"submit\" name=\"action\" value=\"", htmlspecialchars($a['multiaction']), "\" class=\"danger",
+							($n == 0 && $safe ? ' ppa-bulk-danger-start' : ''), "\">{$a['content']}</button>\n";
+					echo "<button type=\"button\" class=\"ppa-bulk-clear\">", htmlspecialchars($lang['strclearselection']), "</button>\n";
 					echo $misc->form;
-					echo "</td>\n";
-					echo "</tr>\n";
-					echo "</table>\n";
+					echo "</div>\n";
 					echo '</form>';
 				};
 

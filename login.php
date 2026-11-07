@@ -37,9 +37,26 @@
 	}
 
 	$md5_server = md5($server);
+
+	// The username to show: the one just tried, if this is a failed login.
+	$login_username = '';
+	if (isset($_POST['loginUsername']) && is_scalar($_POST['loginUsername']))
+		$login_username = (string) $_POST['loginUsername'];
+	elseif (isset($loginUsername) && is_scalar($loginUsername))
+		$login_username = (string) $loginUsername;
+
+	// Post the login to the page that asked for it, so that page is shown
+	// once logged in (lib.inc.php redirects to it, with only the fields of
+	// LOGIN_PASSTHROUGH: where to go, never what to do). Pages that only
+	// make sense with a posted form or as a download go through redirect.php.
+	$login_action = basename($_SERVER['SCRIPT_NAME'] ?? '');
+	if (!preg_match('/^[a-z_]+\.php$/', $login_action)
+		|| in_array($login_action, array('login.php', 'logout.php', 'redirect.php', 'index.php', 'sql.php',
+			'dataexport.php', 'dbexport.php', 'dataimport.php', 'ajax-ac-insert.php', 'browser.php'), true))
+		$login_action = 'redirect.php';
 ?>
 
-<form id="login_form" action="redirect.php" method="post" name="login_form">
+<form id="login_form" action="<?php echo htmlspecialchars($login_action); ?>" method="post" name="login_form">
 <?php
 	if (!empty($_POST)) $vars =& $_POST;
 	else $vars =& $_GET;
@@ -55,7 +72,7 @@
 	<table class="navbar login">
 		<tr>
 			<td><label for="loginUsername"><?php echo $lang['strusername']; ?></label></td>
-			<td><input type="text" id="loginUsername" name="loginUsername" autocomplete="username" value="<?php if (isset($_POST['loginUsername']) && is_scalar($_POST['loginUsername'])) echo htmlspecialchars((string) $_POST['loginUsername']); ?>" size="24" /></td>
+			<td><input type="text" id="loginUsername" name="loginUsername" autocomplete="username" value="<?php echo htmlspecialchars($login_username); ?>" size="24" /></td>
 		</tr>
 		<tr>
 			<td><label for="loginPassword"><?php echo $lang['strpassword']; ?></label></td>

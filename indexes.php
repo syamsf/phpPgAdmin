@@ -338,7 +338,6 @@
 			)
 		);
 		
-		$misc->printTable($indexes, $columns, $actions, 'indexes-indexes', $lang['strnoindexes'], 'indPre');
 		
 		$misc->printNavLinks(array (
 			'create' => array (
@@ -357,6 +356,7 @@
 				'content' => $lang['strcreateindex']
 			)
 		), 'indexes-indexes', get_defined_vars());
+		$misc->printTable($indexes, $columns, $actions, 'indexes-indexes', $lang['strnoindexes'], 'indPre');
 	}
 
 	function doTree() {

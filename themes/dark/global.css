@@ -264,4 +264,4 @@ div.logo a {
 
 
 /* Destructive actions in lists */
-a.danger, .ppa-row-actions > a.danger { color: #ff8a80; }
+:root { --ppa-danger: #ff8a80; }
