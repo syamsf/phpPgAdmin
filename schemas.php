@@ -110,21 +110,46 @@
 	}
 
 	/**
+	 * Prints the options of an Owner list: the roles the current user can act as
+	 * (NOLOGIN ones included), since giving an object to any other role fails with
+	 * "must be able to SET ROLE". $keep is a current owner to list even when it is
+	 * not one of them, so that leaving the list alone changes nothing.
+	 * @param $selected The role to select, null for the role the session runs as
+	 * @param $keep The current owner, or null
+	 */
+	function printOwnerOptions($selected, $keep = null) {
+		global $data;
+
+		$roles = array();
+		$current = '';
+		$rs = $data->getActableRoles();
+		while (!$rs->EOF) {
+			$roles[] = $rs->fields['rolname'];
+			if ($data->phpBool($rs->fields['is_current'])) $current = $rs->fields['rolname'];
+			$rs->moveNext();
+		}
+		if ($keep !== null && $keep !== '' && !in_array($keep, $roles, true)) {
+			$roles[] = $keep;
+			sort($roles, SORT_STRING);
+		}
+		if ($selected === null) $selected = $current;
+
+		foreach ($roles as $role) {
+			$r = htmlspecialchars($role);
+			echo "\t\t\t\t<option value=\"{$r}\"", ($role === $selected) ? ' selected="selected"' : '', ">{$r}</option>\n";
+		}
+	}
+
+	/**
 	 * Displays a screen where they can enter a new schema
 	 */
 	function doCreate($msg = '') {
 		global $data, $misc;
 		global $lang;
 
-		$server_info = $misc->getServerInfo();
-
 		if (!isset($_POST['formName'])) $_POST['formName'] = '';
-		if (!isset($_POST['formAuth'])) $_POST['formAuth'] = $server_info['username'];
 		if (!isset($_POST['formSpc'])) $_POST['formSpc'] = '';
 		if (!isset($_POST['formComment'])) $_POST['formComment'] = '';
-
-		// Fetch all users from the database
-		$users = $data->getUsers();
 
 		$misc->printTrail('database');
 		$misc->printTitle($lang['strcreateschema'],'pg.schema.create');
@@ -138,12 +163,7 @@
 		// Owner
 		echo "\t<tr>\n\t\t<th class=\"data left required\">{$lang['strowner']}</th>\n";
 		echo "\t\t<td class=\"data1\">\n\t\t\t<select name=\"formAuth\">\n";
-		while (!$users->EOF) {
-			$uname = htmlspecialchars($users->fields['usename']);
-			echo "\t\t\t\t<option value=\"{$uname}\"",
-				($uname == $_POST['formAuth']) ? ' selected="selected"' : '', ">{$uname}</option>\n";
-			$users->moveNext();
-		}
+		printOwnerOptions(isset($_POST['formAuth']) ? $_POST['formAuth'] : null);
 		echo "\t\t\t</select>\n\t\t</td>\n\t</tr>\n";
 		echo "\t<tr>\n\t\t<th class=\"data left\">{$lang['strcomment']}</th>\n";
 		echo "\t\t<td class=\"data1\"><textarea name=\"formComment\" rows=\"3\" cols=\"32\">",
@@ -209,16 +229,10 @@
 			echo "\t</tr>\n";
 
 			if ($data->hasAlterSchemaOwner()) {
-				$users = $data->getUsers();
 				echo "<tr><th class=\"data left required\">{$lang['strowner']}</th>\n";
-					echo "<td class=\"data2\"><select name=\"owner\">";
-					while (!$users->EOF) {
-						$uname = $users->fields['usename'];
-						echo "<option value=\"", htmlspecialchars($uname), "\"",
-						($uname == $_POST['owner']) ? ' selected="selected"' : '', ">", htmlspecialchars($uname), "</option>\n";
-						$users->moveNext();
-					}
-					echo "</select></td></tr>\n";
+				echo "<td class=\"data2\"><select name=\"owner\">";
+				printOwnerOptions($_POST['owner'], $schema->fields['ownername']);
+				echo "</select></td></tr>\n";
 			}
 			else 
 				echo "<input name=\"owner\" value=\"{$_POST['owner']}\" type=\"hidden\" />";

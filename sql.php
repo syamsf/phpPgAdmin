@@ -175,11 +175,14 @@
 		unset($_POST['paginate']);
 		unset($_GET['paginate']);
 	}
-	// Check to see if pagination has been specified. In that case, send to display
-	// script for pagination
-	/* if a file is given or the request is an explain, do not paginate */
+	/* With the data grid ticked, send a query that returns rows to display.php:
+	 * it pages through it as SELECT * FROM (query) AS sub, in a read-only
+	 * transaction.  Anything else (CREATE, INSERT, SET, EXPLAIN, ...) and
+	 * uploaded scripts run here as typed.  The first word decides, after any
+	 * leading blanks, comments and parentheses. */
+	$sql_first = preg_replace('~^(?:\s+|--[^\n]*|/\*.*?\*/|\()*~s', '', $_SESSION['sqlquery']);
 	if (isset($_REQUEST['paginate']) && !(isset($_FILES['script']) && $_FILES['script']['size'] > 0)
-			&& (preg_match('/^\s*explain/i', $_SESSION['sqlquery']) == 0)) {
+			&& preg_match('/^(select|with|values|table)\b/i', $sql_first)) {
 		include('./display.php');
 		exit;
 	}

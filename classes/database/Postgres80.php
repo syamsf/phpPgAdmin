@@ -339,6 +339,17 @@ class Postgres80 extends Postgres81 {
 		return $this->selectSet($sql);
 	}
 
+	/**
+	 * Before roles (8.1) there is no membership to act through: every user.
+	 * @return rolname, and is_current (true for the session user)
+	 */
+	function getActableRoles() {
+		$sql = "SELECT usename AS rolname, usename = current_user AS is_current
+			FROM pg_catalog.pg_user ORDER BY usename";
+
+		return $this->selectSet($sql);
+	}
+
 	// Capabilities
 
 	function hasAggregateSortOp() { return false; }

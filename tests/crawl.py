@@ -259,6 +259,17 @@ def check_data_grid(fetch, check, failures, base, server):
             return None
         return base + html.unescape(m.group(1))
 
+    # With the grid ticked, a statement that returns no rows runs as typed
+    # (the grid would wrap it in SELECT * FROM (...)); queries still page.
+    for sql, expect in (("create SCHEMA grid_ddl_test;", "sql-ok"),
+                        ("drop schema grid_ddl_test", "sql-ok"),
+                        ("-- note\n(select g from generate_series(1, 100) g)", "qt=")):
+        status, body = fetch(base + "sql.php", dict(db, query=sql, paginate="on", page_size="25"))
+        check("POST sql.php paginate " + sql, status, body)
+        if expect not in body or "syntax error" in body:
+            failures.append("POST sql.php paginate %r -> expected %r, got %s"
+                            % (sql, expect, re.sub(r"\s+", " ", body)[-400:]))
+
     page2_a = run_query("SELECT id, val FROM public.plain ORDER BY id")
     page2_b = run_query("SELECT g AS tab_b FROM generate_series(1000, 1100) g")
     for url, expect, reject in ((page2_a, md5(26), "tab_b"), (page2_b, "1025", md5(26))):

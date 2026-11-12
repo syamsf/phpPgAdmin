@@ -37,6 +37,7 @@ status=0
 python3 crawl.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
 python3 dblogin.py "http://127.0.0.1:$PPA_PORT" scoped scoped || status=1
 python3 security.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
+python3 schemaowner.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
 
 # Headless Chrome checks of the JavaScript side (needs Node and Chrome; run
 # "npm ci --prefix tests/browser" once). CHROME points at the browser binary.

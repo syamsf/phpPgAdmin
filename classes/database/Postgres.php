@@ -6486,6 +6486,27 @@ class Postgres extends ADODB_base {
 	}
 
 	/**
+	 * Returns the roles the current user can act as (SET ROLE to), NOLOGIN roles
+	 * included: the roles it may give an object to, e.g. with CREATE SCHEMA ...
+	 * AUTHORIZATION or ALTER ... OWNER TO. A superuser gets every role. The
+	 * built-in pg_ roles are left out.
+	 * @return rolname, and is_current (true for the role the session runs as)
+	 */
+	function getActableRoles() {
+		// From PostgreSQL 16 a member may lack the right to SET ROLE to the role.
+		$v = pg_version($this->conn->_connectionID);
+		$priv = (isset($v['server']) && floatval($v['server']) >= 16) ? 'SET' : 'MEMBER';
+
+		$sql = "SELECT rolname, rolname = current_user AS is_current
+			FROM pg_catalog.pg_roles
+			WHERE pg_catalog.pg_has_role(current_user, oid, '{$priv}')
+				AND rolname !~ '^pg_'
+			ORDER BY rolname";
+
+		return $this->selectSet($sql);
+	}
+
+	/**
 	 * Returns all users in the database cluster
 	 * @return All users
 	 */
