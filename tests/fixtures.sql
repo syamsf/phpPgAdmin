@@ -107,3 +107,13 @@ CREATE DATABASE ppa_other;
 CREATE ROLE scoped LOGIN PASSWORD 'scoped';
 REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
 REVOKE CONNECT ON DATABASE ppa_test FROM PUBLIC;
+
+-- The owner model, for tests/schemaowner.py: ppa_owned belongs to the NOLOGIN
+-- role ppa_owned_owner, the login app is a member, and its sessions in
+-- ppa_owned run as ppa_owned_owner, so what it creates belongs to the role.
+CREATE ROLE ppa_owned_owner NOLOGIN;
+CREATE ROLE app LOGIN PASSWORD 'app';
+GRANT ppa_owned_owner TO app;
+GRANT CONNECT ON DATABASE postgres TO app;
+CREATE DATABASE ppa_owned OWNER ppa_owned_owner;
+ALTER ROLE app IN DATABASE ppa_owned SET role = 'ppa_owned_owner';
