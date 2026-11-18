@@ -115,6 +115,7 @@ function test_all_lists_users_with_groups() {
 	assert_same(array('dba'), $all[1]['groups']);
 	assert_same(false, $all[0]['disabled']);
 	assert_same('Bob', $all[1]['display_name']);
+	assert_same(1, preg_match('/^\d{4}-\d\d-\d\dT/', (string) $all[0]['created_at']));
 }
 
 function test_set_disabled_deletes_direct_shares() {

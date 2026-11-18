@@ -1108,7 +1108,10 @@
 	$lang['strvaultunavailable'] = 'The login vault is unavailable. The server log has the details.';
 	$lang['strvaultusers'] = 'Users';
 	$lang['strvaultusersintro'] = 'Local accounts for signing in to phpPgAdmin. These are not database logins.';
-	$lang['strvaultusersmanaged'] = 'Users are managed by your sign-in provider';
+	$lang['strvaultusersintrosso'] = 'Everyone your sign-in provider has let in to phpPgAdmin, listed from their first visit. The provider owns their passwords and groups. Disabling someone here blocks them in phpPgAdmin only.';
+	$lang['strvaultuserssso'] = 'Passwords and groups are managed by your sign-in provider.';
+	$lang['strvaultfirstseen'] = 'First seen';
+	$lang['strvaultnousers'] = 'No one has signed in yet.';
 	$lang['strvaultdisplayname'] = 'Display name';
 	$lang['strvaultgroups'] = 'Groups';
 	$lang['strvaultusername'] = 'Username';

@@ -113,7 +113,7 @@ class VaultUsers {
 
 	/**
 	 * Every local account with its groups, sorted by username.
-	 * @return array rows of username, display_name, groups, disabled (bool), last_seen_at
+	 * @return array rows of username, display_name, groups, disabled (bool), last_seen_at, created_at
 	 */
 	public function all(): array {
 		$groups = array();
@@ -121,13 +121,14 @@ class VaultUsers {
 			$groups[$row['username']][] = $row['group_name'];
 		}
 		$out = array();
-		foreach ($this->db->query('SELECT username, display_name, disabled, last_seen_at FROM users ORDER BY username') as $row) {
+		foreach ($this->db->query('SELECT username, display_name, disabled, last_seen_at, created_at FROM users ORDER BY username') as $row) {
 			$out[] = array(
 				'username' => $row['username'],
 				'display_name' => $row['display_name'],
 				'groups' => isset($groups[$row['username']]) ? $groups[$row['username']] : array(),
 				'disabled' => (int)$row['disabled'] !== 0,
 				'last_seen_at' => $row['last_seen_at'],
+				'created_at' => $row['created_at'],
 			);
 		}
 		return $out;

@@ -814,11 +814,38 @@ def test_non_admin_gets_403():
 
 
 @test
-def test_sso_users_page_404():
+def test_sso_users_page():
+    name = uniq("sso-seen")
+    seen = who(name, "dba")
+    status, _ = seen.get("intro.php")
+    check(status == 200, "a new sso user got HTTP %s" % status)
     c = Client(SSO, OTHER, identity=("ppa-test", "role-admin"))
+    status, page = c.get("intro.php")
+    check('href="vault_users.php"' in page, "no Users tab for an sso admin")
     status, page = c.get("vault_users.php")
-    check(status == 404, "sso mode answered HTTP %s" % status)
-    check("Users are managed by your sign-in provider" in page, "the message is missing")
+    text = flat(page)
+    check(status == 200, "sso mode answered HTTP %s" % status)
+    check("Everyone your sign-in provider has let in" in text, "no sso intro: %s" % text[:600])
+    check(re.search(r"%s Active \d+ \w+ \d{4} just now" % re.escape(name), text), "%s isn't listed: %s" % (name, text[-1500:]))
+    check("First seen" in text and "Display name" not in text, "wrong columns")
+    check("Add user" not in text and "Reset password" not in text and "action=groups" not in page, "local-only actions shown")
+    # Local-only actions are refused
+    status, page = c.get("vault_users.php", action="add")
+    check(status == 404 and "Passwords and groups are managed by your sign-in provider." in flat(page), "add in sso: HTTP %s" % status)
+    status, page = c.post("vault_users.php", {"action": "savepassword", "user": name, "password": "Whatever-pass-1234"})
+    check(status == 404, "savepassword in sso: HTTP %s" % status)
+    # Disable blocks them at the proxy door; enable lets them back in
+    status, page = c.get("vault_users.php", action="disable", user=name)
+    check("Disable user" in flat(page), "no confirmation")
+    status, page = c.post("vault_users.php", {"action": "dodisable", "user": name})
+    check(re.search(r"%s Disabled" % re.escape(name), flat(page)), "%s isn't shown as disabled" % name)
+    status, page = seen.get("intro.php")
+    check(status == 403 and "Your account is disabled." in page, "a disabled sso user got HTTP %s" % status)
+    c.post("vault_users.php", {"action": "doenable", "user": name})
+    status, _ = seen.get("intro.php")
+    check(status == 200, "an enabled sso user got HTTP %s" % status)
+    status, page = c.post("vault_users.php", {"action": "dodisable", "user": "ppa-test"})
+    check("your own account" in page, "an sso admin disabled themself")
     c = Client(SSO, OTHER, identity=("plain", "dba"))
     status, page = c.get("vault_users.php")
     check(status == 403, "a non-admin in sso got HTTP %s" % status)
@@ -889,7 +916,12 @@ def test_share_to_group_shows_in_dropdown():
     check("Has access (1)" in text and "group dba" in text, "dba isn't listed: %s" % text[-800:])
     check("added by boss" in text and "no expiry" in text, "no share meta")
     check(re.search(r"%s ppa_other vault_rot read-only 1 group OK" % re.escape(label), text), "summary row: %s" % text[:1200])
-    check('<datalist id="vault-principals">' in page, "no name suggestions")
+    check('<datalist id="vault-principals-user">' in page and '<datalist id="vault-principals-group">' in page,
+          "no name suggestions")
+    m = re.search(r'<datalist id="vault-principals-group">(.*?)</datalist>', page, re.S)
+    check(m and '<option value="dba"' in m.group(1), "dba isn't suggested as a group")
+    m = re.search(r'<datalist id="vault-principals-user">(.*?)</datalist>', page, re.S)
+    check(m and '<option value="dba"' not in m.group(1), "a group is suggested as a user")
 
     alice = who(uniq("alice"), "dba")
     opts = [o for o in saved_options(login_page(alice)) if o["label"] == label]
@@ -1150,6 +1182,21 @@ def test_per_database_server_rejects_other_db():
 
 
 @test
+def test_share_form_defaults_to_user():
+    cid = rot_shared(uniq("usr-default"))
+    page = admin_get(boss(), id=cid)
+    radios = re.findall(r'<input type="radio" name="type" value="(\w+)"[^>]*?( checked="checked")?\s*/>', page)
+    check(radios == [("user", " checked=\"checked\""), ("group", "")], "share radios: %r" % radios)
+    check(re.search(r'<label for="vault-principal">User name</label>', page), "the name field isn't labelled for a user")
+    m = re.search(r'<input type="text" id="vault-principal"[^>]*>', page)
+    check(m and 'list="vault-principals-user"' in m.group(0), "the name field doesn't suggest users: %s" % (m.group(0) if m else ""))
+    # After a failed group share, the form keeps the group choice
+    page = share_via_page(boss(), cid, "group", "")
+    m = re.search(r'<input type="text" id="vault-principal"[^>]*>', page)
+    check(m and 'list="vault-principals-group"' in m.group(0), "a failed group share lost the choice")
+
+
+@test
 def test_database_field_follows_server():
     admin = boss()
     # A per-database server: a select of just its databases
@@ -1158,7 +1205,7 @@ def test_database_field_follows_server():
     check(m, "no Database select for a per-database server")
     check(re.findall(r'<option value="([^"]*)"', m.group(1)) == ["ppa_other", "ppa_test"], "options: %s" % m.group(1))
     check('<option value="ppa_test" selected="selected">' in m.group(1), "the posted database isn't selected")
-    check("<datalist" not in page.replace('<datalist id="vault-principals">', ""), "a browser suggestion list is left")
+    check("<datalist" not in re.sub(r'<datalist id="vault-principals-(user|group)">', "", page), "a browser suggestion list is left")
     # Any other server: a text box with what was typed
     page = post_form(admin, "test", label=uniq("dbfield"), server_id="test", database="postgres", password="wrong")
     m = re.search(r'<input type="text" id="vault-database" name="database"[^>]*>', page)

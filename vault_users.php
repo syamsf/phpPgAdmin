@@ -1,9 +1,10 @@
 <?php
 
 	/**
-	 * App users (local sign-in mode): list, add, reset password, set groups,
-	 * disable and enable. Admins only. In sso mode the sign-in provider owns
-	 * the users, so the page only says so.
+	 * App users, admins only. Local sign-in mode: list, add, reset password,
+	 * set groups, disable and enable. Sso mode: everyone the sign-in proxy
+	 * has let in (recorded on their first request), with disable and
+	 * enable; the provider owns their passwords and groups.
 	 */
 
 	// Not tied to a server
@@ -18,6 +19,7 @@
 
 	$action = (isset($_REQUEST['action']) && is_scalar($_REQUEST['action'])) ? (string) $_REQUEST['action'] : '';
 	$vault_user = (isset($_REQUEST['user']) && is_scalar($_REQUEST['user'])) ? (string) $_REQUEST['user'] : '';
+	$vault_local = $vault->config['auth_mode'] === 'local';
 
 	function vaultMsg($text, $error = false) {
 		if ($text === '') return;
@@ -70,7 +72,7 @@
 	}
 
 	function doDefault($msg = '', $error = false) {
-		global $misc, $lang, $vault;
+		global $misc, $lang, $vault, $vault_local;
 
 		$misc->printTrail('root');
 		$misc->printTabs('root', 'vaultusers');
@@ -87,11 +89,20 @@
 		$now = time();
 		echo "<div class=\"vault-page\">\n";
 		echo "<h2>", htmlspecialchars($lang['strvaultusers']), "</h2>\n";
-		echo "<p class=\"vault-intro\">", htmlspecialchars($lang['strvaultusersintro']), "</p>\n";
-		echo "<p><a href=\"vault_users.php?action=add\" data-ppa-dialog=\"modal\" class=\"vault-primary\">",
-			htmlspecialchars($lang['strvaultadduser']), "</a></p>\n";
+		echo "<p class=\"vault-intro\">", htmlspecialchars($lang[$vault_local ? 'strvaultusersintro' : 'strvaultusersintrosso']), "</p>\n";
+		if ($vault_local) {
+			echo "<p><a href=\"vault_users.php?action=add\" data-ppa-dialog=\"modal\" class=\"vault-primary\">",
+				htmlspecialchars($lang['strvaultadduser']), "</a></p>\n";
+		} elseif (!$users) {
+			echo "<p>", htmlspecialchars($lang['strvaultnousers']), "</p>\n</div>\n";
+			return;
+		}
+		// Sso mode has no display names or stored groups: the provider owns them.
+		$columns = $vault_local
+			? array('strvaultusername', 'strvaultdisplayname', 'strvaultgroups', 'strvaultstatus', 'strvaultlastseen', 'stractions')
+			: array('strvaultusername', 'strvaultstatus', 'strvaultfirstseen', 'strvaultlastseen', 'stractions');
 		echo "<div class=\"vault-table-wrap\">\n<table class=\"vault-table\">\n<thead><tr>";
-		foreach (array('strvaultusername', 'strvaultdisplayname', 'strvaultgroups', 'strvaultstatus', 'strvaultlastseen', 'stractions') as $key) {
+		foreach ($columns as $key) {
 			echo "<th scope=\"col\">", htmlspecialchars($lang[$key]), "</th>";
 		}
 		echo "</tr></thead>\n<tbody>\n";
@@ -99,23 +110,30 @@
 			$u = rawurlencode($row['username']);
 			echo "<tr", $row['disabled'] ? ' class="vault-row-failed"' : '', ">\n";
 			echo "<td class=\"vault-label\">", htmlspecialchars($row['username']), "</td>\n";
-			echo "<td>", htmlspecialchars($row['display_name']), "</td>\n";
-			echo "<td>";
-			if ($row['groups']) {
-				foreach ($row['groups'] as $group) {
-					echo "<span class=\"vault-chip\">", htmlspecialchars($group), "</span> ";
+			if ($vault_local) {
+				echo "<td>", htmlspecialchars((string) $row['display_name']), "</td>\n";
+				echo "<td>";
+				if ($row['groups']) {
+					foreach ($row['groups'] as $group) {
+						echo "<span class=\"vault-chip\">", htmlspecialchars($group), "</span> ";
+					}
+				} else {
+					echo htmlspecialchars($lang['strvaultnogroups']);
 				}
-			} else {
-				echo htmlspecialchars($lang['strvaultnogroups']);
+				echo "</td>\n";
 			}
-			echo "</td>\n";
 			echo "<td>", $row['disabled']
 				? '<span class="vault-status vault-status-failed">' . htmlspecialchars($lang['strvaultdisabledstatus']) . '</span>'
 				: '<span class="vault-status vault-status-ok">' . htmlspecialchars($lang['strvaultactivestatus']) . '</span>', "</td>\n";
+			if (!$vault_local) {
+				echo "<td>", htmlspecialchars(VaultFormat::date((string) $row['created_at'])), "</td>\n";
+			}
 			echo "<td>", htmlspecialchars(VaultFormat::ago($row['last_seen_at'], $now)), "</td>\n";
-			echo "<td class=\"vault-actions\">",
-				"<a href=\"vault_users.php?action=password&amp;user={$u}\" data-ppa-dialog=\"modal\">", htmlspecialchars($lang['strvaultresetpassword']), "</a> · ",
-				"<a href=\"vault_users.php?action=groups&amp;user={$u}\" data-ppa-dialog=\"modal\">", htmlspecialchars($lang['strvaultsetgroups']), "</a> · ";
+			echo "<td class=\"vault-actions\">";
+			if ($vault_local) {
+				echo "<a href=\"vault_users.php?action=password&amp;user={$u}\" data-ppa-dialog=\"modal\">", htmlspecialchars($lang['strvaultresetpassword']), "</a> · ",
+					"<a href=\"vault_users.php?action=groups&amp;user={$u}\" data-ppa-dialog=\"modal\">", htmlspecialchars($lang['strvaultsetgroups']), "</a> · ";
+			}
 			if ($row['disabled']) {
 				echo "<a href=\"vault_users.php?action=enable&amp;user={$u}\" data-ppa-dialog=\"modal\">", htmlspecialchars($lang['strvaultenable']), "</a>";
 			} else {
@@ -276,19 +294,16 @@
 		doDefault(sprintf($lang[$disable ? 'strvaultuserdisabled' : 'strvaultuserenabled'], $vault_user));
 	}
 
-	if ($vault->config['auth_mode'] !== 'local') {
+	$misc->printHeader($lang['strvaultusers']);
+	$misc->printBody();
+
+	// Sso mode: the provider owns accounts, passwords and groups.
+	if (!$vault_local && in_array($action, array('add', 'saveadd', 'password', 'savepassword', 'groups', 'savegroups'), true)) {
 		http_response_code(404);
-		$misc->printHeader($lang['strvaultusers']);
-		$misc->printBody();
-		$misc->printTrail('root');
-		$misc->printTabs('root', 'vaultusers');
-		vaultMsg($lang['strvaultusersmanaged']);
+		doDefault($lang['strvaultuserssso'], true);
 		$misc->printFooter();
 		exit;
 	}
-
-	$misc->printHeader($lang['strvaultusers']);
-	$misc->printBody();
 
 	if (isset($_POST['cancel'])) $action = '';
 	if (!Misc::isPost() && in_array($action, array('saveadd', 'savepassword', 'savegroups', 'dodisable', 'doenable'), true)) $action = '';
