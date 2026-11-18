@@ -225,7 +225,9 @@ def check_data_grid(fetch, check, failures, base, server):
     md5 = lambda n: hashlib.md5(str(n).encode()).hexdigest()
 
     # Big table: planner estimate instead of COUNT(*), unless asked for
-    get(table("big"), ["of about 200K", "Count exactly"], ["Last >>"])
+    get(table("big"), ["of about 200K", "Count exactly", "page=last"])
+    # "Last" without an exact total counts once and opens the last page
+    get(table("big", page="last"), ["Rows 199,981–200,000 of 200,000"], ["Count exactly", "Last >>", "rel=\"next\""])
     get(table("big", count="exact"), ["of 200,000", "Last >>"], ["Count exactly"])
     get(table("big", sortkey="2", sortdir="desc", page="3"), ["Rows 61–90 of about 200K"])
     get(table("big", **{"filter[val]": "abc"}), ["Count rows"], ["of about"])

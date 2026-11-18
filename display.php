@@ -588,6 +588,12 @@
 		global $data, $conf, $misc, $lang, $plugin_manager;
 
 		$save_history = false;
+		// page=last: the "Last" link of a result whose total isn't known yet.
+		// The rows are counted once and a page past the end is moved to the
+		// last one (see browseQuery).
+		$want_last = (isset($_REQUEST['page']) && $_REQUEST['page'] === 'last');
+		if ($want_last)
+			$_REQUEST['page'] = PHP_INT_MAX;
 		// If current page is not set, default to first page
 		if (!isset($_REQUEST['page']) || !is_numeric($_REQUEST['page']) || (int)$_REQUEST['page'] < 1)
 			$_REQUEST['page'] = 1;
@@ -670,7 +676,7 @@
 
 		list($page_size, $page_sizes) = getBrowsePageSize();
 		$filters = getBrowseFilters();
-		$count_mode = (isset($_REQUEST['count']) && $_REQUEST['count'] === 'exact') ? 'exact' : 'auto';
+		$count_mode = ($want_last || (isset($_REQUEST['count']) && $_REQUEST['count'] === 'exact')) ? 'exact' : 'auto';
 
 		// Fetch unique row identifier, if this is a table browse request.
 		if (isset($object))

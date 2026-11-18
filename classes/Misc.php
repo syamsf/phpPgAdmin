@@ -2102,7 +2102,7 @@
 			$page = (int)$page;
 			if ($page < 1) return;
 
-			// Only a known, exact number of pages gives a "Last" link
+			// Only a known, exact number of pages gives the last page number
 			$known = ($pages !== null && empty($opts['estimated']));
 			if ($pages !== null) {
 				$pages = (int)$pages;
@@ -2160,8 +2160,10 @@
 			if ($has_next) {
 				$temp = $page + 1;
 				echo "<a class=\"pagenav\" rel=\"next\" href=\"{$url}{$temp}\">", htmlspecialchars($lang['strnext']), "</a>\n";
-				if ($known)
-					echo "<a class=\"pagenav\" href=\"{$url}{$pages}\">", htmlspecialchars($lang['strlast']), "</a>\n";
+				// Without an exact total the last page isn't known yet:
+				// page=last counts the rows once and opens the last page.
+				$last_page = $known ? $pages : 'last';
+				echo "<a class=\"pagenav\" href=\"{$url}{$last_page}\">", htmlspecialchars($lang['strlast']), "</a>\n";
 			}
 			echo "</nav>\n";
 		}
