@@ -22,3 +22,5 @@ libraries/adodb/drivers/adodb-text.inc.php
 *.md
 .claude
 docs
+.env
+.env.*

@@ -30,6 +30,7 @@ function ok(cond, msg) {
 
 	async function newPage() {
 		const page = await browser.newPage();
+		await page.setExtraHTTPHeaders({'Remote-User': 'ppa-test', 'Remote-Groups': 'role-admin'});
 		await page.setViewport({ width: 1280, height: 900 });
 		// Stay out of the frameset: pages reload themselves into it when opened on their own
 		await page.evaluateOnNewDocument(() => {
@@ -73,7 +74,7 @@ function ok(cond, msg) {
 	t = await countText(page);
 	ok(t.startsWith('Rows 31–60 of about 200K'), 'next page: ' + t);
 	ok(await page.$eval('nav.pagination [aria-current="page"]', (e) => e.textContent) === '2', 'aria-current on page 2');
-	ok(!(await page.$('nav.pagination a.pagenav:last-child[href*="page=6667"]')), 'no Last link for an estimate');
+	ok(!!(await page.$('nav.pagination a.pagenav:last-child[href*="page=last"]')), 'Last link for an estimate counts first');
 
 	await nav(page, () => page.select('select.grid-page-size', '50'));
 	t = await countText(page);
@@ -222,10 +223,14 @@ function ok(cond, msg) {
 	await nav(tabB, () => tabB.click('nav.pagination a[rel="next"]'));
 	ok((await tabB.$eval('table.data-grid tbody tr td:nth-child(1)', (e) => e.textContent)) === '1050', 'tab B page 3 still its own');
 	ok(await tabA.$eval('#sql-editor-form textarea.sql-editor', (e) => e.value) === 'SELECT id, val FROM public.plain ORDER BY id', 'tab A query box shows tab A query');
-	ok(!(await tabB.$('nav.pagination a.pagenav[href*="page=5"]')) || true, 'unknown total pagination');
 	const navText = await tabB.$eval('nav.pagination', (e) => e.textContent.replace(/\s+/g, ' ').trim());
-	ok(!navText.includes('Last'), 'no Last for unknown total: ' + navText);
+	ok(navText.includes('Last'), 'Last link for unknown total: ' + navText);
 	await tabB.screenshot({ path: path.join(shots, 'query-tab-b.png') });
+	await nav(tabB, () => tabB.click('nav.pagination a.pagenav[href*="page=last"]'));
+	const lastText = await countText(tabB);
+	ok(lastText.startsWith('Rows 101–101 of 101'), 'Last counts the query and opens its last page: ' + lastText);
+	ok((await tabB.$eval('table.data-grid tbody tr td:nth-child(1)', (e) => e.textContent)) === '1100', 'last page shows the last row');
+	ok(!(await tabB.$('nav.pagination a[rel="next"]')), 'no Next on the last page');
 
 	// Reload of sql.php (GET) goes to the SQL editor
 	await tabB.goto(base + 'sql.php?' + qs(db));

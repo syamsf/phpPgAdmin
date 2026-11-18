@@ -30,6 +30,8 @@ jobs:
           docker run --rm -v "$PWD":/app:ro -w /app php:${{ matrix.php }}-cli sh -ec '
             find . -name "*.php" -not -path "./.git/*" -print0 \
               | xargs -0 -n1 -P4 php -l > /tmp/lint.log 2>&1 || { grep -v "^No syntax errors" /tmp/lint.log; exit 1; }
+            # The vault CLI has no .php extension.
+            php -l bin/vault
           '
 
   smoke:

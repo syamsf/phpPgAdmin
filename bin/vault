@@ -1,0 +1,171 @@
+#!/usr/bin/env php
+<?php
+
+/*
+ * Login vault command line, for what has to happen before anyone can sign in.
+ *
+ *   php bin/vault user:add [--admin] [--groups=a,b] [--name="Display name"] <username>
+ *       Adds a local account (local mode). The password is read from stdin:
+ *       asked for twice on a terminal, otherwise the first line.
+ *       --admin also puts the account in AUTH_ADMIN_GROUP.
+ *
+ *   php bin/vault backup <file>
+ *       Writes a consistent copy of the vault database to <file>, which
+ *       must not exist yet. Keep the vault key apart from it.
+ *
+ * In Docker: docker exec -it phppgadmin php bin/vault user:add --admin alice
+ * Exits 0 on success and 1 on any error, with a one-line message.
+ */
+
+if (PHP_SAPI !== 'cli') {
+	exit(1);
+}
+
+$cwd = getcwd();
+chdir(dirname(__DIR__));
+
+require_once('./classes/vault/VaultError.php');
+require_once('./classes/vault/VaultStore.php');
+require_once('./classes/vault/VaultConfig.php');
+require_once('./classes/vault/VaultAudit.php');
+require_once('./classes/vault/VaultUsers.php');
+
+/** Prints $message on stderr and exits 1. VaultError messages are $lang keys. */
+function vault_cli_fail(string $message): void {
+	$lang = array();
+	if (is_file('./lang/english.php')) {
+		include('./lang/english.php');
+	}
+	if (isset($lang[$message])) {
+		$message = $lang[$message];
+	}
+	fwrite(STDERR, 'vault: ' . $message . "\n");
+	exit(1);
+}
+
+function vault_cli_usage(): void {
+	vault_cli_fail('usage: php bin/vault user:add [--admin] [--groups=a,b] [--name="Display name"] <username>'
+		. ' | php bin/vault backup <file>');
+}
+
+/** One line of stdin without its line ending, or null at the end of input. */
+function vault_cli_line(): ?string {
+	$line = fgets(STDIN);
+	if ($line === false) {
+		return null;
+	}
+	return rtrim($line, "\r\n");
+}
+
+/** The new password: typed twice (not shown) on a terminal, else the first line of stdin. */
+function vault_cli_password(): string {
+	$tty = function_exists('stream_isatty') ? stream_isatty(STDIN) : (function_exists('posix_isatty') && posix_isatty(STDIN));
+	if (!$tty) {
+		$password = vault_cli_line();
+		if ($password === null || $password === '') {
+			vault_cli_fail('no password on stdin.');
+		}
+		return $password;
+	}
+
+	register_shutdown_function(function () {
+		@system('stty echo 2>/dev/null');
+	});
+	@system('stty -echo 2>/dev/null');
+	fwrite(STDERR, 'Password: ');
+	$password = vault_cli_line();
+	fwrite(STDERR, "\nPassword again: ");
+	$again = vault_cli_line();
+	fwrite(STDERR, "\n");
+	@system('stty echo 2>/dev/null');
+	if ($password === null || $password === '') {
+		vault_cli_fail('no password given.');
+	}
+	if ($password !== $again) {
+		vault_cli_fail('the passwords do not match.');
+	}
+	return $password;
+}
+
+$args = array_slice($argv, 1);
+$command = array_shift($args);
+if ($command === null) {
+	vault_cli_usage();
+}
+
+try {
+	if (!is_file('./conf/config.inc.php')) {
+		throw new VaultError('conf/config.inc.php is missing.');
+	}
+	$conf = array();
+	include('./conf/config.inc.php');
+	$config = VaultConfig::fromConf($conf);
+
+	if ($command === 'user:add') {
+		$admin = false;
+		$groups = array();
+		$name = '';
+		$username = null;
+		foreach ($args as $arg) {
+			if ($arg === '--admin') {
+				$admin = true;
+			} elseif (strncmp($arg, '--groups=', 9) === 0) {
+				$groups = array_merge($groups, explode(',', substr($arg, 9)));
+			} elseif (strncmp($arg, '--name=', 7) === 0) {
+				$name = substr($arg, 7);
+			} elseif (strncmp($arg, '-', 1) === 0 || $username !== null) {
+				vault_cli_usage();
+			} else {
+				$username = $arg;
+			}
+		}
+		if ($username === null) {
+			vault_cli_usage();
+		}
+		if ($admin) {
+			$groups[] = $config['admin_group'];
+		}
+		$db = VaultStore::open($config['db_path']);
+		$users = new VaultUsers($db, new VaultAudit($db));
+		// Check what can be checked before asking for the password.
+		if (!VaultUsers::validUsername($username)) {
+			throw new VaultError('strvaultbadusername');
+		}
+		if ($users->get($username) !== null) {
+			throw new VaultError('strvaultuserexists');
+		}
+		$groups = VaultUsers::cleanGroups($groups);
+
+		$users->add($username, $name, vault_cli_password(), $groups, 'cli');
+		echo 'Added ', $username, $groups ? ' (groups: ' . implode(', ', $groups) . ')' : '', ".\n";
+		exit(0);
+	}
+
+	if ($command === 'backup') {
+		if (count($args) !== 1 || $args[0] === '') {
+			vault_cli_usage();
+		}
+		$file = $args[0];
+		if ($file[0] !== '/') {
+			$file = $cwd . '/' . $file;
+		}
+		if (file_exists($file)) {
+			throw new VaultError("{$args[0]} already exists.");
+		}
+		$db = VaultStore::open($config['db_path']);
+		$old = umask(0077);
+		try {
+			$db->prepare('VACUUM INTO :file')->execute(array(':file' => $file));
+		} finally {
+			umask($old);
+		}
+		echo 'Wrote ', $args[0], ".\n";
+		exit(0);
+	}
+
+	vault_cli_usage();
+} catch (VaultError $e) {
+	vault_cli_fail($e->getMessage());
+} catch (PDOException $e) {
+	vault_cli_fail('the vault database failed: ' . $e->getMessage());
+}

@@ -39,10 +39,10 @@ function loginErrorDetail($errmsg) {
 }
 
 /**
- * A plain-language reason for a failed login, picked from the server's
- * message, or '' when it doesn't match a case we know.
+ * The $lang key of the plain-language reason for a failed login, picked
+ * from the server's message, or '' when it doesn't match a case we know.
  */
-function loginErrorReason($detail) {
+function loginErrorReasonKey($detail) {
 	global $lang;
 	$cases = array(
 		'/password authentication failed|authentication failed for user|no password supplied|password is required/i' => 'strloginbadpassword',
@@ -56,9 +56,18 @@ function loginErrorReason($detail) {
 		'/not permitted to log in/i' => 'strloginnologin',
 	);
 	foreach ($cases as $re => $key) {
-		if (preg_match($re, $detail) && isset($lang[$key])) return $lang[$key];
+		if (preg_match($re, $detail) && isset($lang[$key])) return $key;
 	}
 	return '';
+}
+
+/**
+ * A plain-language reason for a failed login, or '' (see loginErrorReasonKey).
+ */
+function loginErrorReason($detail) {
+	global $lang;
+	$key = loginErrorReasonKey($detail);
+	return $key === '' ? '' : $lang[$key];
 }
 
 function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
@@ -87,15 +96,21 @@ function Error_Handler($dbms, $fn, $errno, $errmsg, $p1=false, $p2=false)
 		$_reload_browser = true;
 		unset($_SESSION['sharedUsername']);
 		unset($_SESSION['sharedPassword']);
+		$_failed_login = $_SESSION['webdbLogin'][$_REQUEST['server'] ?? ''] ?? array();
+		if (!is_array($_failed_login)) $_failed_login = array();
 		// Keep the name that was tried for the form (login.php): the login
-		// was posted, then redirected, so it isn't in $_POST any more.
-		$loginUsername = $_SESSION['webdbLogin'][$_REQUEST['server'] ?? '']['username'] ?? '';
-		unset($_SESSION['webdbLogin'][$_REQUEST['server']]);
+		// was posted, then redirected, so it isn't in $_POST any more. Not
+		// for a saved login: its username isn't something the user typed.
+		$loginUsername = isset($_failed_login['vault_credential']) ? '' : ($_failed_login['username'] ?? '');
 		$msg = $lang['strloginfailed'];
 		// ADOdb only keeps "Database connection failed"; the server's own
 		// reason is in the warning pg_connect() raised just before.
 		$loginErrorDetail = loginErrorDetail($errmsg);
 		$loginErrorReason = loginErrorReason($loginErrorDetail);
+		// The vault's audit row, rate limit and "password needs updating".
+		if (function_exists('ppa_vault_login_failed'))
+			ppa_vault_login_failed($_failed_login, $loginErrorDetail);
+		unset($_SESSION['webdbLogin'][$_REQUEST['server'] ?? '']);
 		if ($loginErrorDetail !== '')
 			error_log('phpPgAdmin login failed: ' . preg_replace('/\s+/', ' ', $loginErrorDetail));
 		include('./login.php');

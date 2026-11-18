@@ -11,6 +11,7 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox'] });
 const page = await browser.newPage();
+await page.setExtraHTTPHeaders({'Remote-User': 'ppa-test', 'Remote-Groups': 'role-admin'});
 await page.setViewport({ width: 1366, height: 860 });
 
 const errors = [];

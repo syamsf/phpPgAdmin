@@ -65,7 +65,7 @@
 		}
 
 		// Set environmental variables that pg_dump uses
-		putenv('PGPASSWORD=' . $server_info['password']);
+		putenv('PGPASSWORD=' . $misc->loginPassword($server_info));
 		putenv('PGUSER=' . $server_info['username']);
 		$hostname = $server_info['host'];
 		if ($hostname !== null && $hostname != '') {

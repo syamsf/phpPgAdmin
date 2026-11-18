@@ -17,6 +17,7 @@ const BROWSE = `${BASE}display.php?server=${Q}&database=ppa_test&schema=public&s
 
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox'] });
 const page = await browser.newPage();
+await page.setExtraHTTPHeaders({'Remote-User': 'ppa-test', 'Remote-Groups': 'role-admin'});
 await page.setViewport({ width: 1280, height: 800 });
 
 const errors = [];

@@ -44,22 +44,27 @@ def check(cond, msg):
 class Client:
     """A browser stand-in: keeps cookies, sends the page's CSRF token."""
 
-    def __init__(self, base, server):
+    def __init__(self, base, server, identity=("ppa-test", "role-admin")):
+        """identity: (user, groups) sent as the sign-in proxy's headers on
+        every request; None sends none."""
         self.base = base.rstrip("/") + "/"
         self.server = server
         self.token = None
         self.status = None
         self.headers = {}
+        self.final_url = None  # where the last request ended, after redirects
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+        if identity is not None:
+            self.opener.addheaders += [("Remote-User", identity[0]), ("Remote-Groups", identity[1])]
 
     def _open(self, url, body=None, headers=None):
         req = urllib.request.Request(url, body, headers or {})
         try:
             with self.opener.open(req, timeout=60) as resp:
-                self.status, self.headers = resp.status, dict(resp.headers)
+                self.status, self.headers, self.final_url = resp.status, dict(resp.headers), resp.geturl()
                 page = resp.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
-            self.status, self.headers = e.code, dict(e.headers)
+            self.status, self.headers, self.final_url = e.code, dict(e.headers), e.geturl()
             page = e.read().decode("utf-8", "replace")
         m = META_TOKEN.search(page)
         if m:

@@ -81,6 +81,29 @@
 		});
 	}
 
+	// sql.php asks before running a DELETE without WHERE or a TRUNCATE.
+	// Its "don't ask again" box lasts for this browser tab only, so it lives
+	// in sessionStorage (one per tab, gone when the tab is closed); while it
+	// is set, the tab's forms to sql.php say so with ppa_run_unsafe.
+	var UNSAFE_KEY = 'ppa-run-unsafe';
+	window.addEventListener('submit', function (e) {
+		var form = e.target;
+		if (!form || form.nodeName !== 'FORM') return;
+		var remember = form.querySelector('input[data-ppa-unsafe-remember]');
+		var allowed = false;
+		try {
+			if (remember && remember.checked) window.sessionStorage.setItem(UNSAFE_KEY, '1');
+			allowed = window.sessionStorage.getItem(UNSAFE_KEY) === '1';
+		} catch (err) { /* storage blocked: keep asking */ }
+		if (!allowed || form.querySelector('input[name="ppa_run_unsafe"]')) return;
+		if (!/(^|\/)sql\.php$/.test(new URL(form.getAttribute('action') || location.href, location.href).pathname)) return;
+		var input = document.createElement('input');
+		input.type = 'hidden';
+		input.name = 'ppa_run_unsafe';
+		input.value = '1';
+		form.appendChild(input);
+	}, true);
+
 	// A POST form without the field (one a page script built, say) gets it.
 	window.addEventListener('submit', function (e) {
 		var form = e.target;
@@ -232,6 +255,9 @@
 			headers: method === 'GET' ? { 'X-PPA-Partial': '1' } : { 'X-PPA-Partial': '1', 'X-PPA-CSRF': csrfToken() },
 			signal: ctrl ? ctrl.signal : undefined
 		}).then(function (res) {
+			// Signed out (or timed out): the server says where to sign in.
+			var go = res.headers.get('X-PPA-Signin');
+			if (go) { finish(); location.href = go; return; }
 			var type = res.headers.get('Content-Type') || '';
 			var disposition = res.headers.get('Content-Disposition') || '';
 			if (!/text\/html/i.test(type) || /attachment/i.test(disposition)) {
@@ -460,6 +486,8 @@
 		progress(true);
 		return fetch(url, { credentials: 'same-origin', headers: { 'X-PPA-Partial': '1' } })
 			.then(function (res) {
+				var go = res.headers.get('X-PPA-Signin');
+				if (go) { progress(false); location.href = go; return new Promise(function () {}); }
 				if (!/text\/html/i.test(res.headers.get('Content-Type') || '')) throw new Error('not a page');
 				return res.text().then(function (html) { return { html: html, url: res.url || url }; });
 			})
@@ -575,7 +603,11 @@
 
 		fetch(url, { method: method === 'get' ? 'GET' : 'POST', body: body, credentials: 'same-origin',
 			headers: method === 'get' ? { 'X-PPA-Partial': '1' } : { 'X-PPA-Partial': '1', 'X-PPA-CSRF': csrfToken() } })
-			.then(function (res) { return res.text().then(function (html) { return { html: html, url: res.url || url }; }); })
+			.then(function (res) {
+				var go = res.headers.get('X-PPA-Signin');
+				if (go) { progress(false); location.href = go; return new Promise(function () {}); }
+				return res.text().then(function (html) { return { html: html, url: res.url || url }; });
+			})
 			.then(function (r) {
 				progress(false);
 				if (!dialog) return;

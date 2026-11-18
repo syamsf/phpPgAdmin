@@ -14,7 +14,9 @@ cd "$(dirname "$0")"
 
 export PG_VERSION="${PG_VERSION:-18}"
 export PHP_VERSION="${PHP_VERSION:-8.5}"
-export PPA_PORT="${PPA_PORT:-8080}"
+export PPA_PORT="${PPA_PORT:-8080}"               # app: sso mode
+export PPA_LOCAL_PORT="${PPA_LOCAL_PORT:-8081}"   # app_local: local mode
+export PPA_STRICT_PORT="${PPA_STRICT_PORT:-8082}" # app_strict: sso, trusts no test client
 
 compose() { docker compose -f compose.yaml "$@"; }
 
@@ -27,29 +29,43 @@ trap cleanup EXIT
 
 echo "== PHP $PHP_VERSION, PostgreSQL $PG_VERSION"
 
+status=0
+
+echo "== unit tests"
+docker run --rm -v "$PWD/..:/app:ro" -w /app "php:${PHP_VERSION}-cli" php tests/unit/run.php || status=1
+
 if [ -n "${PPA_IMAGE:-}" ]; then
 	compose up -d --wait --no-build
 else
 	compose up -d --wait --build
 fi
 
-status=0
+# The local-mode accounts tests/vault.py signs in with (on a kept stack they
+# exist already, and these fail harmlessly). On a stack you started
+# yourself, run these two once:
+#   printf 'Admin-pass-123456\n' | docker compose -f tests/compose.yaml exec -T app_local php bin/vault user:add --admin admin
+#   printf 'Lock-pass-123456\n' | docker compose -f tests/compose.yaml exec -T app_local php bin/vault user:add lock-me
+printf 'Admin-pass-123456\n' | compose exec -T app_local php bin/vault user:add --admin admin || true
+printf 'Lock-pass-123456\n' | compose exec -T app_local php bin/vault user:add lock-me || true
+
 python3 crawl.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
 python3 dblogin.py "http://127.0.0.1:$PPA_PORT" scoped scoped || status=1
 python3 security.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
 python3 schemaowner.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
+python3 sqlguard.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
+python3 vault.py "http://127.0.0.1:$PPA_PORT" "http://127.0.0.1:$PPA_LOCAL_PORT" "http://127.0.0.1:$PPA_STRICT_PORT" || status=1
 
 # Headless Chrome checks of the JavaScript side (needs Node and Chrome; run
 # "npm ci --prefix tests/browser" once). CHROME points at the browser binary.
 if [ "${BROWSER:-0}" = 1 ]; then
-	for t in shell.mjs editor.js grid.js dialog.mjs; do
+	for t in shell.mjs editor.js grid.js dialog.mjs vault.mjs; do
 		echo "== browser/$t"
 		node "browser/$t" "http://127.0.0.1:$PPA_PORT/" || status=1
 	done
 fi
 
 # Anything PHP complained about ends up in the Apache error log (container stderr).
-compose logs --no-log-prefix app 2>&1 \
+compose logs --no-log-prefix app app_local app_strict 2>&1 \
 	| grep -E "PHP (Fatal error|Parse error|Warning|Notice|Deprecated)" \
 	| sed -E 's/^.*\] (PHP )/\1/; s/\\nStack trace:.*//' \
 	| sort | uniq -c | sort -rn > php-errors.log || true

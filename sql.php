@@ -119,6 +119,55 @@
 		}
 	}
 
+	/**
+	 * Shows the statements that would empty a table and asks before running
+	 * them, with the editor below to change the query instead.
+	 * @param $unsafe The statements, from SqlEditor::unsafeStatements()
+	 * @param $query The SQL that would run
+	 * @param $posted The query as posted, before an EXPLAIN ANALYZE prefix, or null
+	 */
+	function sqlAskBeforeRunning($unsafe, $query, $posted) {
+		global $misc, $lang, $data;
+
+		$misc->printHeader($lang['strqueryresults'], SqlEditor::head());
+		$misc->printBody();
+		$misc->printTrail('database');
+		if (isset($_REQUEST['database'])) $misc->printTabs('database', 'sql');
+		$misc->printTitle($lang['strsqlunsafetitle']);
+
+		echo "<div class=\"sql-unsafe\" role=\"alert\">\n";
+		echo "<p><strong>", htmlspecialchars($lang['strsqlunsafe']), "</strong></p>\n<ul>\n";
+		foreach ($unsafe as $statement)
+			echo "<li><code>", htmlspecialchars($statement), "</code></li>\n";
+		echo "</ul>\n<p>", htmlspecialchars($lang['strsqlunsafehint']), "</p>\n";
+
+		// The same request again, with ppa_run_unsafe
+		echo "<form action=\"sql.php\" method=\"post\" class=\"sql-unsafe-form\">\n";
+		echo $misc->form;
+		$fields = array('query' => $posted !== null ? $posted : $query);
+		foreach (array('sqleditor_text', 'sqleditor_selection', 'search_path', 'paginate', 'explain_analyze', 'return', 'nohistory') as $name) {
+			if (isset($_POST[$name]) && is_string($_POST[$name])) $fields[$name] = $_POST[$name];
+		}
+		$fields['ppa_run_unsafe'] = '1';
+		foreach ($fields as $name => $value)
+			echo "<input type=\"hidden\" name=\"", htmlspecialchars($name), "\" value=\"", htmlspecialchars($value), "\" />\n";
+		echo "<label><input type=\"checkbox\" data-ppa-unsafe-remember=\"1\" /> ", htmlspecialchars($lang['strsqlunsafenoask']), "</label>\n";
+		echo "<p><input type=\"submit\" class=\"sql-unsafe-run\" value=\"", htmlspecialchars($lang['strsqlrunanyway']), "\" /></p>\n";
+		echo "</form>\n</div>\n";
+
+		// The editor, to add a WHERE instead
+		$search_path = isset($_REQUEST['search_path']) && is_string($_REQUEST['search_path'])
+			? $_REQUEST['search_path'] : implode(',', $data->getSearchPath());
+		SqlEditor::printResultsForm(isset($_POST['sqleditor_text']) && is_string($_POST['sqleditor_text'])
+			? $_POST['sqleditor_text'] : ($posted !== null ? $posted : $query), array(
+			'search_path' => $search_path,
+			'paginate' => isset($_REQUEST['paginate']),
+			'selection' => isset($_POST['sqleditor_selection']) ? $_POST['sqleditor_selection'] : null,
+		));
+
+		$misc->printFooter();
+	}
+
 	// The Explain buttons of the SQL editor run EXPLAIN on the query. Done
 	// before the query is stored, so pagination and history see what ran.
 	$sql_posted_query = isset($_POST['query']) ? $_POST['query'] : null;
@@ -156,6 +205,20 @@
 		if (isset($_REQUEST['server'])) $_params['server'] = $_REQUEST['server'];
 		if (isset($_REQUEST['database'])) $_params['database'] = $_REQUEST['database'];
 		header('Location: sqledit.php?' . http_build_query($_params, '', '&'));
+		exit;
+	}
+
+	/* A DELETE without WHERE or a TRUNCATE empties a whole table: show what
+	 * would run and ask first. "Run anyway" posts it again with
+	 * ppa_run_unsafe. Its "don't ask again" box is kept by js/app.js for this
+	 * browser tab only (sessionStorage); app.js then adds ppa_run_unsafe to
+	 * the tab's SQL forms itself. EXPLAIN without ANALYZE runs nothing, and an
+	 * uploaded script is run as a whole on purpose. */
+	if (empty($_POST['ppa_run_unsafe'])
+			&& !(isset($_FILES['script']) && $_FILES['script']['size'] > 0)
+			&& !(isset($_POST['explain']) && !isset($_POST['explain_analyze']))
+			&& ($sql_unsafe = SqlEditor::unsafeStatements($_sqlquery))) {
+		sqlAskBeforeRunning($sql_unsafe, $_sqlquery, $sql_posted_query);
 		exit;
 	}
 

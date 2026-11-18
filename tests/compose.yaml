@@ -22,12 +22,51 @@ services:
       context: ..
       args:
         PHP_VERSION: ${PHP_VERSION:-8.5}
-    environment:
+    environment: &app-env
       PPA_SERVERS: "Test=db:5432 Scoped=db:5432/ppa_other+ppa_test Tls=db:5432?sslmode=require"
       PPA_SSLMODE: allow   # keeps the server ids (db:5432:allow) the tests use
       PPA_SHOW_ADVANCED: "true"
+      # The test clients send Remote-User / Remote-Groups themselves, so
+      # every address counts as the proxy here. Never do this for real.
+      AUTH_MODE: sso
+      AUTH_ADMIN_GROUP: role-admin
+      AUTH_TRUSTED_PROXIES: "0.0.0.0/0 ::/0"
+      VAULT_KEY: dGVzdC1rZXktZm9yLXBocHBnYWRtaW4tdmF1bHQtMzI=   # test only
+      VAULT_DB_PATH: /data/vault.sqlite
     ports:
       - "127.0.0.1:${PPA_PORT:-8080}:8080"
     depends_on:
+      db:
+        condition: service_healthy
+
+  # Local mode: app accounts, signin.php. run.sh adds the accounts.
+  app_local:
+    image: ${PPA_IMAGE:-ppa:test}
+    environment:
+      <<: *app-env
+      AUTH_MODE: local
+      AUTH_ADMIN_GROUP: role-admin
+      AUTH_TRUSTED_PROXIES: ""
+      SERVERS_ALLOW_UI: "false"
+    ports:
+      - "127.0.0.1:${PPA_LOCAL_PORT:-8081}:8080"
+    depends_on:
+      app:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+  # sso with a proxy list that matches none of the test clients: every
+  # request must get 403.
+  app_strict:
+    image: ${PPA_IMAGE:-ppa:test}
+    environment:
+      <<: *app-env
+      AUTH_TRUSTED_PROXIES: 192.0.2.1/32
+    ports:
+      - "127.0.0.1:${PPA_STRICT_PORT:-8082}:8080"
+    depends_on:
+      app:
+        condition: service_started
       db:
         condition: service_healthy

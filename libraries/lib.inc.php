@@ -13,6 +13,11 @@
 	// Report everything.
 	error_reporting(E_ALL);
 
+	// Stack traces in the log never carry function arguments (a password
+	// passed to a function, say). The Docker image's php.ini already does
+	// this; this covers other installs.
+	ini_set('zend.exception_ignore_args', '1');
+
 	// Application name
 	$appName = 'phpPgAdmin';
 
@@ -88,6 +93,20 @@
 		}
 	}
 
+	// Who is asking: the SSO headers from a trusted proxy, or a local
+	// sign-in. In sso mode anything else gets a 403 here. Sets $vault.
+	require_once('./classes/vault/Vault.php');
+	// A vault storage error nobody caught (PDOException, VaultError) gets
+	// a generic "unavailable" page, not a blank 500; the detail is logged.
+	set_exception_handler(array('Vault', 'uncaught'));
+	try {
+		$vault = Vault::boot($conf, basename($_SERVER['SCRIPT_NAME'] ?? ''));
+	} catch (VaultError $_vault_error) {
+		// Seen by people who aren't signed in: no path or setting on the
+		// page, only in the log.
+		Vault::unavailable($_vault_error);
+	}
+
 	$misc->setHREF();
 	$misc->setForm();
 
@@ -103,6 +122,10 @@
 		exit;
 	}
 
+	// The sign-in form and Sign out (they change the session id, so this
+	// has to run while the session is still open).
+	$vault->handleAuthPost(basename($_SERVER['SCRIPT_NAME'] ?? ''));
+
 	// Enforce PHP environment
 	ini_set('arg_separator.output', '&amp;');
 
@@ -110,28 +133,86 @@
 		if (strncmp((string) $_login_key, 'login', 5) === 0 && !is_scalar($_login_val))
 			unset($_POST[$_login_key]);
 	}
-	// If login action is set, then set session variables
+	// A login posted from login.php: typed (loginPassword_<md5 of the
+	// server>), or a saved login (loginCredential, its id only: the
+	// password stays in the vault and never goes into the session).
+	$_login_kind = null;
 	if (isset($_POST['loginServer']) && isset($_POST['loginUsername']) &&
-		isset($_POST['loginPassword_'.md5($_POST['loginServer'])])) {
+		isset($_POST['loginPassword_'.md5($_POST['loginServer'])]))
+		$_login_kind = 'manual';
+	elseif (isset($_POST['loginServer']) && isset($_POST['loginCredential']))
+		$_login_kind = 'saved';
 
-		$_server_info = $misc->getServerInfo($_POST['loginServer']);
-
-		$_server_info['username'] = $_POST['loginUsername'];
-		$_server_info['password'] = $_POST['loginPassword_'.md5($_POST['loginServer'])];
-
-		$misc->setServerInfo(null, $_server_info, $_POST['loginServer']);
-
-		// Check for shared credentials
-		if (isset($_POST['loginShared'])) {
-			$_SESSION['sharedUsername'] = $_POST['loginUsername'];
-			$_SESSION['sharedPassword'] = $_POST['loginPassword_'.md5($_POST['loginServer'])];
+	if ($_login_kind !== null) {
+		$_login_server = (string) $_POST['loginServer'];
+		$misc->getServerInfo($_login_server); // stops on an unknown server
+		$_login_targets = $misc->getLoginTargets();
+		if (!isset($_login_targets[$_login_server])) {
+			echo $lang['strinvalidserverparam'];
+			exit;
 		}
+		// A new login starts from the server's settings, not from what an
+		// earlier login of this server left in the session.
+		$_server_info = $_login_targets[$_login_server];
+		list($_login_vkey, $_login_db) = Misc::vaultScope($_server_info);
+		$_login_who = $vault->identity;
+		$_login_store = true;
 
-		// A new session id for the logged-in session (no fixation), and a
-		// fresh GET of the page: nothing posted with the login form runs.
-		session_regenerate_id(true);
-		unset($_SESSION['ppa_csrf']); // a new token for the logged-in session
-		$_SESSION['ppa_reload_browser'] = true;
+		// 5 failed logins to a server in 5 minutes: wait (typed and saved alike).
+		$_login_lock = $_login_who !== null ? $vault->audit->loginLockSeconds($_login_who->username, $_login_vkey, time()) : 0;
+		if ($_login_lock > 0) {
+			$_SESSION['ppa_flash'] = Vault::loginLockMessage($_login_lock);
+			$_login_store = false;
+		}
+		elseif ($_login_kind === 'saved') {
+			// Someone else's login, an unknown id and a login for another
+			// server or database all get the same answer.
+			$_login_row = $_login_who !== null
+				? $vault->creds->canUse($_login_who, (string) $_POST['loginCredential'], VaultStore::now()) : null;
+			if ($_login_row === null || $_login_row['server_id'] !== $_login_vkey || $_login_row['database'] !== $_login_db) {
+				$_SESSION['ppa_flash'] = $lang['strvaultloginrevoked'];
+				$_login_store = false;
+			}
+			else {
+				$_server_info['username'] = $_login_row['pg_username'];
+				$_server_info['vault_credential'] = $_login_row['id'];
+				$_server_info['vault_kind'] = $_login_row['kind'];
+				$_server_info['vault_label'] = $_login_row['label'];
+				$misc->setServerInfo(null, $_server_info, $_login_server);
+			}
+			unset($_login_row);
+		}
+		else {
+			$_server_info['username'] = $_POST['loginUsername'];
+			$_server_info['password'] = $_POST['loginPassword_'.md5($_login_server)];
+
+			// "Save this login": saved after the first successful connect
+			// (Misc::vaultAfterConnect), so a wrong password is never saved.
+			if (isset($_POST['loginSave']) && $_login_who !== null) {
+				$_login_label = isset($_POST['loginSaveLabel']) ? (string) $_POST['loginSaveLabel'] : '';
+				$_login_label = trim((string) preg_replace('/\p{Cc}+/u', ' ', $_login_label));
+				if ($_login_label === '')
+					$_login_label = sprintf($lang['strvaultdefaultlabel'], (string) $_POST['loginUsername'], $_login_db);
+				$_server_info['vault_save_label'] = mb_substr($_login_label, 0, 100, 'UTF-8');
+			}
+
+			$misc->setServerInfo(null, $_server_info, $_login_server);
+
+			// Check for shared credentials
+			if (isset($_POST['loginShared'])) {
+				$_SESSION['sharedUsername'] = $_POST['loginUsername'];
+				$_SESSION['sharedPassword'] = $_POST['loginPassword_'.md5($_login_server)];
+			}
+		}
+		unset($_server_info);
+
+		if ($_login_store) {
+			// A new session id for the logged-in session (no fixation), and a
+			// fresh GET of the page: nothing posted with the login form runs.
+			session_regenerate_id(true);
+			unset($_SESSION['ppa_csrf']); // a new token for the logged-in session
+			$_SESSION['ppa_reload_browser'] = true;
+		}
 		$_login_target = array();
 		foreach (Misc::LOGIN_PASSTHROUGH as $_login_key) {
 			if (isset($_POST[$_login_key]) && is_scalar($_POST[$_login_key]))
@@ -302,11 +383,13 @@
 	    }
 		$_server_info = $misc->getServerInfo();
 
-		/* starting with PostgreSQL 9.0, we can set the application name.
-		 * Before the first connection the version isn't known yet: assume a
-		 * current server (libpq retries without it if the server rejects it). */
+		/* starting with PostgreSQL 9.0, we can set the application name:
+		 * phppgadmin:<the signed-in person>, so pg_stat_activity and the
+		 * server log show who it is even on a shared login. Before the
+		 * first connection the version isn't known yet: assume a current
+		 * server (libpq retries without it if the server rejects it). */
 		if (!isset($_server_info['pgVersion']) || version_compare($_server_info['pgVersion'], '9', '>='))
-			putenv("PGAPPNAME={$appName}_{$appVersion}");
+			putenv('PGAPPNAME=' . Vault::appName($vault->identity ? $vault->identity->username : ''));
 
 		// Don't hang on a server that doesn't answer.
 		if (getenv('PGCONNECT_TIMEOUT') === false)

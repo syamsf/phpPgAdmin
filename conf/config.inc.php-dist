@@ -190,6 +190,62 @@
 	 */
 	$conf['plugins'] = array();
 
+	/** Sign-in and saved logins (the login vault)
+	 * The app knows who you are before you log in to any server. The names
+	 * in brackets are the environment variables of the Docker image.
+	 */
+	$conf['vault'] = array(
+		// 'sso': a sign-in proxy (e.g. Authelia) sends the user and groups
+		// in headers. 'local': users and passwords kept by this app.
+		// Required. (AUTH_MODE)
+		'auth_mode' => '',
+
+		// Members of this group are admins. Required. (AUTH_ADMIN_GROUP)
+		'admin_group' => '',
+
+		// sso only: addresses or CIDRs of the sign-in proxy, separated by
+		// commas or spaces, e.g. '10.0.0.5/32'. Requests from anywhere else
+		// get 403. Only safe when the app can't be reached except through
+		// that proxy. (AUTH_TRUSTED_PROXIES)
+		'trusted_proxies' => '',
+
+		// sso only: the headers with the username and the comma-separated
+		// groups. (AUTH_USER_HEADER, AUTH_GROUPS_HEADER)
+		'user_header' => 'Remote-User',
+		'groups_header' => 'Remote-Groups',
+
+		// Key that encrypts saved passwords: base64 of exactly 32 random
+		// bytes (openssl rand -base64 32). Keep it out of the web root and
+		// back it up apart from the database. The file wins over the inline
+		// key. (VAULT_KEY_FILE, VAULT_KEY)
+		'key_file' => '',
+		'key' => '',
+
+		// The SQLite file with saved logins. Its directory must be writable
+		// by the web server and not served over HTTP. Required. (VAULT_DB_PATH)
+		'db_path' => '',
+
+		// false = only the servers above. Servers added in the UI are off
+		// (out of the tree, their logins unusable) and can't be added or
+		// changed; they come back when this is true again. (SERVERS_ALLOW_UI)
+		'servers_allow_ui' => true,
+
+		// sso only: where Sign out sends you (the proxy's logout page).
+		// Empty hides Sign out. (AUTH_SIGNOUT_URL)
+		'signout_url' => '',
+
+		// Minutes without a request before the session is cleared; 0 = never.
+		// (AUTH_IDLE_MINUTES)
+		'idle_minutes' => 30,
+
+		// Settings for servers added in the UI.
+		'ui_defaults' => array(
+			'pg_dump_path' => '/usr/bin/pg_dump',
+			'pg_dumpall_path' => '/usr/bin/pg_dumpall',
+			'sslrootcert' => '',
+		),
+	);
+
 	/*****************************************
 	 * Don't modify anything below this line *
 	 *****************************************/

@@ -323,46 +323,11 @@
 
 			while ($i < $len) {
 				$c = $sql[$i];
-				$next = $i + 1 < $len ? $sql[$i + 1] : '';
 
-				if ($c == '-' && $next == '-') {
-					$end = strpos($sql, "\n", $i);
-					$i = $end === false ? $len : $end + 1;
-					continue;
-				}
-				if ($c == '/' && $next == '*') {
-					// Block comments nest in PostgreSQL
-					$nest = 1;
-					$i += 2;
-					while ($i < $len && $nest > 0) {
-						if ($sql[$i] == '/' && $i + 1 < $len && $sql[$i + 1] == '*') { $nest++; $i += 2; }
-						elseif ($sql[$i] == '*' && $i + 1 < $len && $sql[$i + 1] == '/') { $nest--; $i += 2; }
-						else $i++;
-					}
-					continue;
-				}
-				if ($c == "'" || $c == '"') {
-					// E'...' strings may contain backslash escapes
-					$escapes = $c == "'" && $i > 0 && ($sql[$i - 1] == 'E' || $sql[$i - 1] == 'e');
-					$i++;
-					while ($i < $len) {
-						if ($escapes && $sql[$i] == '\\') { $i += 2; continue; }
-						if ($sql[$i] == $c) {
-							if ($i + 1 < $len && $sql[$i + 1] == $c) { $i += 2; continue; }
-							break;
-						}
-						$i++;
-					}
-					$i++;
-					$atStart = false;
-					continue;
-				}
-				if ($c == '$' && preg_match('/\G\$([A-Za-z_][A-Za-z0-9_]*)?\$/', $sql, $m, 0, $i)
-						&& ($i == 0 || !preg_match('/[A-Za-z0-9_]/', $sql[$i - 1]))) {
-					// Dollar quoting: skip to the matching tag
-					$end = strpos($sql, $m[0], $i + strlen($m[0]));
-					$i = $end === false ? $len : $end + strlen($m[0]);
-					$atStart = false;
+				if (($skip = self::skipQuoted($sql, $i, $len)) !== null) {
+					// A string or quoted name ends the leading keywords, a comment doesn't
+					if ($skip[1] == 'quote') $atStart = false;
+					$i = $skip[0];
 					continue;
 				}
 				if ($c == '(') { $depth++; $atStart = false; $i++; continue; }
@@ -393,6 +358,137 @@
 			if ($head !== '') $heads[] = $head;
 
 			return $heads;
+		}
+
+		/**
+		 * Skips a comment, string, quoted name or dollar-quoted string that
+		 * starts at $i.
+		 * @return array(index after it, 'comment' or 'quote'), or null when
+		 *         nothing quoted starts at $i
+		 */
+		private static function skipQuoted($sql, $i, $len) {
+			$c = $sql[$i];
+			$next = $i + 1 < $len ? $sql[$i + 1] : '';
+
+			if ($c == '-' && $next == '-') {
+				$end = strpos($sql, "\n", $i);
+				return array($end === false ? $len : $end + 1, 'comment');
+			}
+			if ($c == '/' && $next == '*') {
+				// Block comments nest in PostgreSQL
+				$nest = 1;
+				$i += 2;
+				while ($i < $len && $nest > 0) {
+					if ($sql[$i] == '/' && $i + 1 < $len && $sql[$i + 1] == '*') { $nest++; $i += 2; }
+					elseif ($sql[$i] == '*' && $i + 1 < $len && $sql[$i + 1] == '/') { $nest--; $i += 2; }
+					else $i++;
+				}
+				return array($i, 'comment');
+			}
+			if ($c == "'" || $c == '"') {
+				// E'...' strings may contain backslash escapes
+				$escapes = $c == "'" && $i > 0 && ($sql[$i - 1] == 'E' || $sql[$i - 1] == 'e');
+				$i++;
+				while ($i < $len) {
+					if ($escapes && $sql[$i] == '\\') { $i += 2; continue; }
+					if ($sql[$i] == $c) {
+						if ($i + 1 < $len && $sql[$i + 1] == $c) { $i += 2; continue; }
+						break;
+					}
+					$i++;
+				}
+				return array($i + 1, 'quote');
+			}
+			if ($c == '$' && preg_match('/\G\$([A-Za-z_][A-Za-z0-9_]*)?\$/', $sql, $m, 0, $i)
+					&& ($i == 0 || !preg_match('/[A-Za-z0-9_]/', $sql[$i - 1]))) {
+				// Dollar quoting: skip to the matching tag
+				$end = strpos($sql, $m[0], $i + strlen($m[0]));
+				return array($end === false ? $len : $end + strlen($m[0]), 'quote');
+			}
+			return null;
+		}
+
+		/**
+		 * The statements in an SQL string that empty a whole table: a DELETE
+		 * without a WHERE of its own (a WHERE in a subquery doesn't count)
+		 * and TRUNCATE. sql.php asks before running them.
+		 * DELETE counts where a statement can start: first in the statement,
+		 * in parentheses (a WITH query), after a WITH list or after EXPLAIN.
+		 * Words in comments, strings and function bodies are ignored.
+		 * @return array of the statements, whitespace collapsed and cut to
+		 *         200 characters, in the order they appear
+		 */
+		static function unsafeStatements($sql) {
+			// Split into statements of tokens: array('w', WORD, depth, offset),
+			// array('(', depth outside) and array(')', depth outside).
+			$statements = array();
+			$tokens = array();
+			$len = strlen($sql);
+			$i = 0;
+			$depth = 0;
+			while ($i < $len) {
+				if (($skip = self::skipQuoted($sql, $i, $len)) !== null) {
+					$i = $skip[0];
+					continue;
+				}
+				$c = $sql[$i];
+				if ($c == '(') { $tokens[] = array('(', $depth); $depth++; $i++; continue; }
+				if ($c == ')') { if ($depth > 0) $depth--; $tokens[] = array(')', $depth); $i++; continue; }
+				if ($c == ';' && $depth == 0) {
+					$statements[] = array($tokens, $i);
+					$tokens = array();
+					$i++;
+					continue;
+				}
+				if (preg_match('/\G[A-Za-z_][A-Za-z0-9_$]*/', $sql, $m, 0, $i)) {
+					$tokens[] = array('w', strtoupper($m[0]), $depth, $i);
+					$i += strlen($m[0]);
+					continue;
+				}
+				$i++;
+			}
+			$statements[] = array($tokens, $len);
+
+			$found = array();
+			foreach ($statements as $statement) {
+				list($tokens, $end) = $statement;
+				if (!$tokens || $tokens[0][0] != 'w') continue;
+				if (self::emptiesTable($tokens)) {
+					$text = trim(preg_replace('/\s+/u', ' ', substr($sql, $tokens[0][3], $end - $tokens[0][3])));
+					if (mb_strlen($text, 'UTF-8') > 200) $text = mb_substr($text, 0, 200, 'UTF-8') . "\u{2026}";
+					$found[] = $text;
+				}
+			}
+			return $found;
+		}
+
+		/** True if a statement's tokens (see unsafeStatements) TRUNCATE or DELETE without WHERE. */
+		private static function emptiesTable($tokens) {
+			if ($tokens[0][1] == 'TRUNCATE') return true;
+
+			$n = count($tokens);
+			for ($k = 0; $k + 1 < $n; $k++) {
+				if ($tokens[$k][0] != 'w' || $tokens[$k][1] != 'DELETE'
+						|| $tokens[$k + 1][0] != 'w' || $tokens[$k + 1][1] != 'FROM')
+					continue;
+				// Only where a statement can start (not a column named delete)
+				$prev = $k > 0 ? $tokens[$k - 1] : null;
+				if ($prev !== null && $prev[0] == 'w' && !in_array($prev[1], array('EXPLAIN', 'ANALYZE', 'VERBOSE'), true))
+					continue;
+				// Look for a WHERE at the DELETE's own level, up to the
+				// parenthesis that closes it or the end of the statement.
+				$level = $tokens[$k][2];
+				$where = false;
+				for ($j = $k + 2; $j < $n; $j++) {
+					if ($tokens[$j][0] == ')' && $tokens[$j][1] < $level) break;
+					if ($tokens[$j][0] == 'w' && $tokens[$j][1] == 'WHERE' && $tokens[$j][2] == $level) {
+						$where = true;
+						break;
+					}
+				}
+				if (!$where) return true;
+			}
+			return false;
 		}
 
 		/**
