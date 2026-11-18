@@ -1108,8 +1108,7 @@
 							'title' => $lang['strvaultusers'],
 							'url'   => 'vault_users.php',
 							'icon'  => 'Users',
-							'hide'  => !(isset($vault) && $vault->identity !== null && $vault->identity->isAdmin
-								&& $vault->config['auth_mode'] === 'local'),
+							'hide'  => !(isset($vault) && $vault->identity !== null && $vault->identity->isAdmin),
 						),
 					);
 					break;

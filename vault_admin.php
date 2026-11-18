@@ -21,7 +21,7 @@
 	$action = (isset($_REQUEST['action']) && is_scalar($_REQUEST['action'])) ? (string) $_REQUEST['action'] : '';
 	$vault_id = (isset($_REQUEST['id']) && is_scalar($_REQUEST['id'])) ? (string) $_REQUEST['id'] : '';
 	// What was typed in the share form, shown again after an error.
-	$vault_share_form = array('type' => 'group', 'principal' => '', 'expires' => '');
+	$vault_share_form = array('type' => 'user', 'principal' => '', 'expires' => '');
 
 	/** Rows per audit page. */
 	const VAULT_AUDIT_PAGE = 100;
@@ -229,7 +229,7 @@
 			$shares = $vault->creds->shares($id);
 			$activity = $vault->audit->forCredential($id, 5);
 			foreach ($vault->users->all() as $user) {
-				$users[$user['username']] = true;
+				if (!$user['disabled']) $users[$user['username']] = $user['display_name'];
 				foreach ($user['groups'] as $group) $groups[$group] = true;
 			}
 			foreach ($vault->creds->groupPrincipals() as $group) $groups[$group] = true;
@@ -254,22 +254,28 @@
 		// Share form
 		echo "<form action=\"vault_admin.php\" method=\"post\" class=\"vault-panel-part vault-share-form\" autocomplete=\"off\">\n";
 		echo "<fieldset class=\"vault-access\"><legend>", htmlspecialchars($lang['strvaultsharewith']), "</legend>\n";
-		foreach (array('group' => array('strvaultgroup', 'strvaultprincipalgroup'), 'user' => array('strvaultuser', 'strvaultprincipaluser')) as $type => $keys) {
+		foreach (array('user' => array('strvaultuser', 'strvaultprincipaluser'), 'group' => array('strvaultgroup', 'strvaultprincipalgroup')) as $type => $keys) {
 			echo "<label><input type=\"radio\" name=\"type\" value=\"{$type}\" data-vault-share-type=\"\" data-label=\"",
-				htmlspecialchars($lang[$keys[1]]), "\"", ($isUser === ($type === 'user')) ? ' checked="checked"' : '', " /> ",
+				htmlspecialchars($lang[$keys[1]]), "\" data-list=\"vault-principals-{$type}\"", ($isUser === ($type === 'user')) ? ' checked="checked"' : '', " /> ",
 				htmlspecialchars($lang[$keys[0]]), "</label>\n";
 		}
 		echo "</fieldset>\n";
 		echo "<div class=\"vault-field\"><label for=\"vault-principal\">",
 			htmlspecialchars($lang[$isUser ? 'strvaultprincipaluser' : 'strvaultprincipalgroup']), "</label>",
-			"<input type=\"text\" id=\"vault-principal\" name=\"principal\" list=\"vault-principals\" maxlength=\"128\" required=\"required\" placeholder=\"",
+			"<input type=\"text\" id=\"vault-principal\" name=\"principal\" list=\"vault-principals-", $isUser ? 'user' : 'group',
+			"\" maxlength=\"128\" required=\"required\" placeholder=\"",
 			htmlspecialchars($lang['strvaultprincipalplaceholder']), "\" value=\"", htmlspecialchars($vault_share_form['principal']), "\" /></div>\n";
-		echo "<datalist id=\"vault-principals\">\n";
+		// Name suggestions, one list per choice: the app's (enabled) users
+		// with their display names, and the groups known to the vault.
+		echo "<datalist id=\"vault-principals-user\">\n";
+		foreach ($users as $user => $name) {
+			echo "<option value=\"", htmlspecialchars((string) $user), "\" label=\"",
+				htmlspecialchars((string) $name !== '' ? (string) $name : $lang['strvaultshareuser']), "\"></option>\n";
+		}
+		echo "</datalist>\n";
+		echo "<datalist id=\"vault-principals-group\">\n";
 		foreach (array_keys($groups) as $group) {
 			echo "<option value=\"", htmlspecialchars((string) $group), "\" label=\"", htmlspecialchars($lang['strvaultsharegroup']), "\"></option>\n";
-		}
-		foreach (array_keys($users) as $user) {
-			echo "<option value=\"", htmlspecialchars((string) $user), "\" label=\"", htmlspecialchars($lang['strvaultshareuser']), "\"></option>\n";
 		}
 		echo "</datalist>\n";
 		echo "<div class=\"vault-field\"><label for=\"vault-expires\">", htmlspecialchars($lang['strvaultexpiresoptional']), "</label>",
@@ -338,7 +344,7 @@
 		$type = vaultPost('type');
 		$principal = vaultPost('principal');
 		$expires = trim(vaultPost('expires'));
-		$vault_share_form = array('type' => $type === 'user' ? 'user' : 'group', 'principal' => $principal, 'expires' => $expires);
+		$vault_share_form = array('type' => $type === 'group' ? 'group' : 'user', 'principal' => $principal, 'expires' => $expires);
 		try {
 			$vault->creds->share($vault->identity, $vault_id, $type, $principal, $expires === '' ? null : $expires);
 		} catch (VaultError $e) {

@@ -277,12 +277,14 @@
 	});
 
 	// Shared logins panel (vault_admin.php): the name field's label follows
-	// the Group / User choice.
+	// the User / Group choice, and so do its suggestions (users or groups).
 	document.addEventListener('change', function (e) {
 		var radio = e.target;
 		if (!radio.matches || !radio.matches('input[data-vault-share-type]') || !radio.form) return;
 		var label = radio.form.querySelector('label[for="vault-principal"]');
 		if (label) label.textContent = radio.getAttribute('data-label');
+		var input = radio.form.querySelector('#vault-principal');
+		if (input && radio.getAttribute('data-list')) input.setAttribute('list', radio.getAttribute('data-list'));
 	});
 
 	// Shared login form (vault_admin.php): the Database field follows the
