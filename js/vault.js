@@ -285,15 +285,39 @@
 		if (label) label.textContent = radio.getAttribute('data-label');
 	});
 
-	// Shared login form (vault_admin.php): the database suggestions follow
-	// the chosen server, and "Replace password" (#vault-password) focuses
-	// the password field.
+	// Shared login form (vault_admin.php): the Database field follows the
+	// chosen server, a select of its databases when it has a fixed list,
+	// otherwise a text box with its default database. "Replace password"
+	// (#vault-password) focuses the password field.
 	document.addEventListener('change', function (e) {
 		var select = e.target;
 		if (!select.matches || !select.matches('select[data-vault-dbs]') || !select.form) return;
 		var option = select.options[select.selectedIndex];
-		var input = select.form.querySelector('input[name="database"]');
-		if (option && input) input.setAttribute('list', option.getAttribute('data-list'));
+		var old = select.form.querySelector('[name="database"]');
+		if (!option || !old) return;
+		var dbs = [];
+		try { dbs = JSON.parse(option.getAttribute('data-dbs') || '[]'); } catch (err) { dbs = []; }
+		var field;
+		if (dbs.length) {
+			field = document.createElement('select');
+			dbs.forEach(function (db) {
+				var o = document.createElement('option');
+				o.value = db;
+				o.textContent = db;
+				if (db === old.value) o.selected = true;
+				field.appendChild(o);
+			});
+		} else {
+			field = document.createElement('input');
+			field.type = 'text';
+			field.maxLength = 63;
+			field.autocomplete = 'off';
+			field.value = option.getAttribute('data-default-db') || '';
+		}
+		field.id = old.id;
+		field.name = 'database';
+		field.required = true;
+		old.parentNode.replaceChild(field, old);
 	});
 	document.addEventListener('ppa:load', function () {
 		var field = document.getElementById('vault-password');

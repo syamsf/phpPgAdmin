@@ -112,6 +112,23 @@ try {
 
 	// Manage servers (board 6): the delete dialog's button waits for the typed key.
 	await page.setExtraHTTPHeaders({ 'Remote-User': 'boss', 'Remote-Groups': 'role-admin' });
+	// Shared login form (board 5): the Database field follows the server.
+	await page.goto(BASE + 'vault_admin.php?action=edit', { waitUntil: 'networkidle0' });
+	const dbField = () => page.$eval('#vault-database', (f) => ({ tag: f.tagName, value: f.value, list: f.getAttribute('list'),
+		options: f.tagName === 'SELECT' ? [...f.options].map((o) => o.value) : null }));
+	await page.select('#vault-server', 'scoped');
+	let field = await dbField();
+	check(field.tag === 'SELECT' && JSON.stringify(field.options) === '["ppa_other","ppa_test"]',
+		'a per-database server gets a select of its databases: ' + JSON.stringify(field));
+	await page.select('#vault-server', 'test');
+	field = await dbField();
+	check(field.tag === 'INPUT' && field.value === 'postgres' && field.list === null,
+		'another server gets a plain text box with its default database: ' + JSON.stringify(field));
+	await page.select('#vault-server', 'scoped');
+	await page.select('#vault-database', 'ppa_test');
+	check((await dbField()).value === 'ppa_test', 'the select can be changed');
+	await page.screenshot({ path: OUT + 'shared-form-database.png' });
+
 	await page.goto(BASE + 'servers_admin.php', { waitUntil: 'networkidle0' });
 	if (!(await page.$('a[href*="key=br-db"]'))) {
 		await page.goto(BASE + 'servers_admin.php?action=add', { waitUntil: 'networkidle0' });

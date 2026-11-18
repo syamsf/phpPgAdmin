@@ -629,25 +629,43 @@
 		$misc->printTitle($lang[$id === '' ? 'strvaultnewsharedtitle' : 'strvaulteditsharedtitle']);
 
 		echo "<form action=\"vault_admin.php\" method=\"post\" class=\"vault-form vault-shared-form\" autocomplete=\"off\">\n";
+		// Each server says which databases it allows (a per-database server)
+		// or which one to default to; js/vault.js swaps the Database field
+		// between a select and a text box when the server changes.
 		echo "<div class=\"vault-field\"><label for=\"vault-server\">", htmlspecialchars($lang['strserver']), "</label>",
 			"<select id=\"vault-server\" name=\"server_id\" data-vault-dbs=\"\">\n";
 		foreach ($servers as $s) {
-			echo "<option value=\"", htmlspecialchars($s['key']), "\" data-list=\"vault-dbs-", htmlspecialchars($s['key']), "\"",
+			echo "<option value=\"", htmlspecialchars($s['key']), "\" data-dbs=\"", htmlspecialchars(json_encode(vaultAllowedDatabases($s['key']))),
+				"\" data-default-db=\"", htmlspecialchars($s['default_db']), "\"",
 				$s['key'] === $f['server_id'] ? ' selected="selected"' : '', ">", htmlspecialchars($s['name']), "</option>\n";
 		}
 		echo "</select><span class=\"vault-hint\">", htmlspecialchars($lang['strvaultserverhint']), "</span></div>\n";
 
-		$listId = 'vault-dbs-' . $f['server_id'];
-		echo "<div class=\"vault-field\"><label for=\"vault-database\">", htmlspecialchars($lang['strdatabase']), "</label>",
-			"<input type=\"text\" id=\"vault-database\" name=\"database\" list=\"", htmlspecialchars($listId), "\" maxlength=\"63\" required=\"required\" value=\"",
-			htmlspecialchars($f['database']), "\" /></div>\n";
+		// A server with a fixed list of databases gets a select, any other a
+		// text box (its databases can't be listed without logging in).
+		$selected = null;
 		foreach ($servers as $s) {
-			$dbs = vaultAllowedDatabases($s['key']);
-			if (!$dbs && $s['default_db'] !== '') $dbs = array($s['default_db']);
-			echo "<datalist id=\"vault-dbs-", htmlspecialchars($s['key']), "\">";
-			foreach ($dbs as $db) echo "<option value=\"", htmlspecialchars($db), "\"></option>";
-			echo "</datalist>\n";
+			if ($s['key'] === $f['server_id']) $selected = $s;
 		}
+		if ($selected === null && $servers) $selected = reset($servers);
+		$dbs = $selected !== null ? vaultAllowedDatabases($selected['key']) : array();
+		$database = $f['database'];
+		if ($database === '' && $selected !== null && !$dbs) $database = $selected['default_db'];
+		echo "<div class=\"vault-field\"><label for=\"vault-database\">", htmlspecialchars($lang['strdatabase']), "</label>";
+		if ($dbs) {
+			// A stored value outside the list stays visible, saving it is refused
+			if ($database !== '' && !in_array($database, $dbs, true)) $dbs[] = $database;
+			echo "<select id=\"vault-database\" name=\"database\" required=\"required\">";
+			foreach ($dbs as $db) {
+				echo "<option value=\"", htmlspecialchars($db), "\"", $db === $database ? ' selected="selected"' : '', ">", htmlspecialchars($db), "</option>";
+			}
+			echo "</select>";
+		}
+		else {
+			echo "<input type=\"text\" id=\"vault-database\" name=\"database\" maxlength=\"63\" required=\"required\" autocomplete=\"off\" value=\"",
+				htmlspecialchars($database), "\" />";
+		}
+		echo "</div>\n";
 
 		echo "<div class=\"vault-field\"><label for=\"vault-label\">", htmlspecialchars($lang['strvaultlabel']), "</label>",
 			"<input type=\"text\" id=\"vault-label\" name=\"label\" maxlength=\"100\" required=\"required\" value=\"", htmlspecialchars($f['label']), "\" />",

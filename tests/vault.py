@@ -1150,6 +1150,25 @@ def test_per_database_server_rejects_other_db():
 
 
 @test
+def test_database_field_follows_server():
+    admin = boss()
+    # A per-database server: a select of just its databases
+    page = post_form(admin, "test", label=uniq("dbfield"), database="ppa_test", password="wrong")
+    m = re.search(r'<select id="vault-database" name="database"[^>]*>(.*?)</select>', page, re.S)
+    check(m, "no Database select for a per-database server")
+    check(re.findall(r'<option value="([^"]*)"', m.group(1)) == ["ppa_other", "ppa_test"], "options: %s" % m.group(1))
+    check('<option value="ppa_test" selected="selected">' in m.group(1), "the posted database isn't selected")
+    check("<datalist" not in page.replace('<datalist id="vault-principals">', ""), "a browser suggestion list is left")
+    # Any other server: a text box with what was typed
+    page = post_form(admin, "test", label=uniq("dbfield"), server_id="test", database="postgres", password="wrong")
+    m = re.search(r'<input type="text" id="vault-database" name="database"[^>]*>', page)
+    check(m and 'value="postgres"' in m.group(0) and "list=" not in m.group(0), "no plain text box: %s" % (m.group(0) if m else page[-300:]))
+    # Each server option says what the field should become
+    check('data-dbs="[&quot;ppa_other&quot;,&quot;ppa_test&quot;]"' in page, "the scoped option has no database list")
+    check(re.search(r'<option value="test" data-dbs="\[\]" data-default-db="postgres"', page), "the test option has no default database")
+
+
+@test
 def test_edit_form_never_prefills_password():
     cid = rot_shared(uniq("noprefill"))
     page = form_page(boss(), cid)
