@@ -108,6 +108,9 @@ CREATE ROLE scoped LOGIN PASSWORD 'scoped';
 REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
 REVOKE CONNECT ON DATABASE ppa_test FROM PUBLIC;
 
+-- A plain login for tests/vault.py (ppa_other keeps PUBLIC connect).
+CREATE ROLE vault_rot LOGIN PASSWORD 'Rot-pass-1';
+
 -- The owner model, for tests/schemaowner.py: ppa_owned belongs to the NOLOGIN
 -- role ppa_owned_owner, the login app is a member, and its sessions in
 -- ppa_owned run as ppa_owned_owner, so what it creates belongs to the role.

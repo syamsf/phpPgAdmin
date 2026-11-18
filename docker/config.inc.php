@@ -115,4 +115,26 @@ $conf['ajax_refresh'] = (int) ppa_env('PPA_AJAX_REFRESH', 3);
 $conf['statement_timeout'] = ppa_env('PPA_STATEMENT_TIMEOUT', '');
 $conf['plugins'] = preg_split('/[\s,]+/', ppa_env('PPA_PLUGINS', ''), -1, PREG_SPLIT_NO_EMPTY);
 
+// Sign-in and saved logins. AUTH_MODE, AUTH_ADMIN_GROUP and a vault key have
+// no defaults: without them the app refuses to start. See README.md.
+$conf['vault'] = array(
+	'auth_mode' => ppa_env('AUTH_MODE', ''),
+	'admin_group' => ppa_env('AUTH_ADMIN_GROUP', ''),
+	'trusted_proxies' => ppa_env('AUTH_TRUSTED_PROXIES', ''),
+	'user_header' => ppa_env('AUTH_USER_HEADER', 'Remote-User'),
+	'groups_header' => ppa_env('AUTH_GROUPS_HEADER', 'Remote-Groups'),
+	'key_file' => ppa_env('VAULT_KEY_FILE', ''),
+	'key' => ppa_env('VAULT_KEY', ''),
+	'db_path' => ppa_env('VAULT_DB_PATH', '/data/vault.sqlite'),
+	'servers_allow_ui' => ppa_env_bool('SERVERS_ALLOW_UI', true),
+	'signout_url' => ppa_env('AUTH_SIGNOUT_URL', ''),
+	'idle_minutes' => ppa_env('AUTH_IDLE_MINUTES', '30'),
+	// Settings for servers added in the UI, which have no env of their own.
+	'ui_defaults' => array(
+		'pg_dump_path' => '/usr/bin/pg_dump',
+		'pg_dumpall_path' => '/usr/bin/pg_dumpall',
+		'sslrootcert' => ppa_env('PPA_SSLROOTCERT', ''),
+	),
+);
+
 $conf['version'] = 19;

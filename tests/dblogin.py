@@ -25,6 +25,7 @@ TEST = "db:5432:allow:ppa_test"
 def main(base, user, password):
     base = base.rstrip("/") + "/"
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+    opener.addheaders += [("Remote-User", "ppa-test"), ("Remote-Groups", "role-admin")]
     failures = []
 
     token = {}

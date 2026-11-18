@@ -44,6 +44,7 @@ LINK = re.compile(r"""(?:href|src|action)\s*=\s*["']([^"'#]+)""", re.I)
 def main(base, server, user, password):
     base = base.rstrip("/") + "/"
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+    opener.addheaders += [("Remote-User", "ppa-test"), ("Remote-Groups", "role-admin")]
 
     token = {}
 
@@ -71,6 +72,9 @@ def main(base, server, user, password):
         "loginUsername": user,
         "loginPassword_" + hashlib.md5(server.encode()).hexdigest(): password,
         "loginSubmit": "Login",
+        # A saved login, so My saved logins has a row and its dialog links.
+        "loginSave": "on",
+        "loginSaveLabel": "crawl",
     })
     if status != 200 or "loginUsername" in page:
         print("login failed (HTTP %d)" % status)
@@ -79,7 +83,7 @@ def main(base, server, user, password):
 
     q = urllib.parse.quote(server)
     seeds = [
-        "intro.php", "browser.php", "servers.php", "servers.php?action=tree",
+        "intro.php", "browser.php", "servers.php", "servers.php?action=tree", "vault.php",
         "all_db.php?subject=server&server=" + q,
         "roles.php?subject=server&server=" + q,
         "tablespaces.php?subject=server&server=" + q,

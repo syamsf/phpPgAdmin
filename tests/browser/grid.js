@@ -30,6 +30,7 @@ function ok(cond, msg) {
 
 	async function newPage() {
 		const page = await browser.newPage();
+		await page.setExtraHTTPHeaders({'Remote-User': 'ppa-test', 'Remote-Groups': 'role-admin'});
 		await page.setViewport({ width: 1280, height: 900 });
 		// Stay out of the frameset: pages reload themselves into it when opened on their own
 		await page.evaluateOnNewDocument(() => {

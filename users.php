@@ -70,6 +70,13 @@
 		
 		$server_info = $misc->getServerInfo();
 		
+		// A shared saved login: its role belongs to everyone it is shared
+		// with, so nobody changes its password from here (form or POST).
+		if (($server_info['vault_kind'] ?? null) === 'shared') {
+			doAccount($lang['strvaultsharedpassword']);
+			return;
+		}
+
 		if ($confirm) {
 			$_REQUEST['user'] = $server_info['username'];
 			$misc->printTrail('user');

@@ -265,3 +265,41 @@ div.logo a {
 
 /* Destructive actions in lists */
 :root { --ppa-danger: #ff8a80; }
+
+/* Login vault (login.php, js/vault.js): the same hues, darker grounds. */
+.vault-tag-ro { background: #1c3350; color: #b8d3f2; }
+.vault-tag-rw { background: #4a2a0a; color: #f6cf9c; }
+.vault-select-button { background: #1f1f1f; color: #f0f0f0; border-color: #6f9fd8; }
+.vault-select-list { background: #1f1f1f; color: #f0f0f0; border-color: #555; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
+.vault-select-group { color: #c8c8c8; }
+.vault-option ~ .vault-select-group { border-top-color: #444; }
+.vault-option-meta { color: #c8c8c8; }
+.vault-option-failed { background: #3a2010; }
+.vault-option-failed .vault-option-title svg,
+.vault-option-failed .vault-option-meta,
+.vault-option-failed .vault-option-meta a { color: #f4a46a; }
+.vault-option[aria-selected="true"] { background: #1c3350; }
+.vault-option-active { outline-color: #6f9fd8; }
+
+/* My saved logins (vault.php) */
+.vault-table-wrap { border-color: #555; }
+.vault-table th, .vault-table td { border-bottom-color: #444; }
+.vault-table thead th { background: #2c2c2c; border-bottom-color: #555; }
+.vault-table .vault-group { background: #262626; border-bottom-color: #444; }
+.vault-row-failed { background: #3a2010; }
+.vault-status-ok { background: #1f3a18; color: #bfe3b0; }
+.vault-status-failed { background: #4a2610; border-color: #7a4a2a; color: #f4b890; }
+.vault-delete-link { color: #f4a46a; }
+.vault-expires { color: #f4a46a; }
+
+/* Shared logins (vault_admin.php) */
+.vault-admin-head, .vault-panel-head { background: #2c2c2c; border-color: #555; }
+.vault-panel { border-color: #555; }
+.vault-panel-part, .vault-shares li { border-bottom-color: #444; }
+.vault-table .vault-row-selected { background: #1c3350; }
+.vault-muted { color: #c8c8c8; }
+.vault-remove { background: #1f1f1f; color: #f4a46a; border-color: #7a4a2a; }
+.vault-button { background: #2a5d9f; border-color: #6f9fd8; color: #fff; }
+.vault-status-off { background: #2b2b27; border-color: #55534a; color: #cfcabc; }
+.vault-linkbtn { color: #8fb8ea; }
+.vault-form .vault-test { border-color: #55534a; }

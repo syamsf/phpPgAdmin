@@ -330,6 +330,162 @@ body.ppa-resizing {
 .topbar-links {
 	margin-inline-start: auto;
 }
+/* Who is signed in to the app, at the right of the top bar. */
+.topbar-user {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+}
+.topbar-user-icon {
+	flex: none;
+}
+.topbar-user-via {
+	font-size: var(--ppa-size-sm, 11px);
+	opacity: 0.85;
+}
+.topbar .vault-chip,
+.vault-chip {
+	padding: 1px 6px;
+	border: 1px solid #b8cde6;
+	border-radius: 3px;
+	background: #e2ecf7;
+	color: #1f4f8a;
+	font-size: var(--ppa-size-sm, 11px);
+}
+.topbar-signout {
+	display: inline;
+	margin: 0;
+}
+/* A link to look at, a POST to be safe. */
+.topbar .topbar-signout button {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+/* Sign-in page (local mode): a card on its own, no app shell, the same
+ * in every theme. */
+body.ppa-signin {
+	margin: 0;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	background: #f6f5ee;
+	color: #1a1a1a;
+}
+body.ppa-signin > .signin-head,
+body.ppa-signin > .signin-main {
+	margin: 0;
+}
+.signin-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 16px;
+	border-bottom: 1px solid #cfcab4;
+	background: #ece9d8;
+}
+.signin-app {
+	padding: 12px 20px;
+	background: #d6d2bc;
+	color: #3b3a2e;
+	font-size: 20px;
+	font-weight: 700;
+	letter-spacing: -0.5px;
+}
+.signin-version {
+	padding-inline-end: 20px;
+	color: #4a4838;
+}
+.signin-main {
+	flex: 1;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	padding: 96px 16px 40px;
+}
+.signin-card {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 400px;
+	border: 1px solid #cfcab4;
+	background: #fff;
+}
+.signin-card-head {
+	padding: 12px 20px;
+	border-bottom: 1px solid #cfcab4;
+	background: #ece9d8;
+	color: #4a4838;
+}
+.signin-card-head h1 {
+	margin: 0 0 4px;
+	color: #3b3a2e;
+	font-size: 18px;
+}
+.signin-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 20px;
+}
+.signin-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.signin-field label {
+	font-weight: 700;
+}
+body.ppa-signin .signin-field input {
+	box-sizing: border-box;
+	min-height: 40px;
+	padding: 6px 10px;
+	border: 1px solid #b9b49c;
+	background: #fff;
+	color: #1a1a1a;
+	font: inherit;
+}
+body.ppa-signin .signin-card button[type=submit] {
+	min-height: 44px;
+	padding: 8px 20px;
+	border: 1px solid #1b3f6e;
+	background: #2a5d9f;
+	color: #fff;
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+}
+body.ppa-signin .signin-card button[type=submit]:hover {
+	background: #1b3f6e;
+}
+body.ppa-signin .signin-field input:focus-visible,
+body.ppa-signin .signin-card button[type=submit]:focus-visible {
+	outline: 2px solid #2a5d9f;
+	outline-offset: 2px;
+}
+.signin-alert {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid #f0c9a8;
+	background: #fdecdc;
+	color: #7c2d12;
+}
+.signin-alert svg {
+	flex: none;
+	margin-top: 1px;
+}
+.signin-hint {
+	color: #4a4838;
+	font-size: 12px;
+}
 .trail ol {
 	display: flex;
 	flex-wrap: wrap;
@@ -1209,3 +1365,629 @@ td.process-query {
 	font-family: var(--ppa-mono, monospace);
 	font-size: var(--ppa-size-sm, 0.9em);
 }
+
+/* ---- Login vault: the login page's saved logins (login.php, js/vault.js) ---- */
+
+.vault-login-head {
+	margin-bottom: 12px;
+}
+.vault-login-head h2 {
+	margin-bottom: 4px;
+}
+.vault-login-sub {
+	margin: 0;
+	opacity: 0.85;
+}
+.vault-login-section {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	box-sizing: border-box;
+	max-width: 900px;
+	margin: 12px 0;
+	padding: 16px;
+	border: 1px solid rgba(128, 128, 128, 0.45);
+}
+.vault-login-section h3 {
+	margin: 0;
+	font-size: 1em;
+}
+.vault-login-section form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 0;
+}
+.vault-login-section form > p {
+	margin: 0;
+}
+.vault-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+.vault-field > label {
+	font-weight: 700;
+}
+.vault-login-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	max-width: 560px;
+}
+@media (max-width: 480px) {
+	.vault-login-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+.vault-login-section input[type="text"],
+.vault-login-section input[type="password"] {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 36px;
+	padding: 6px 8px;
+	font: inherit;
+}
+.vault-login-section input[type="submit"],
+.vault-login-section .vault-primary {
+	min-height: 44px;
+	padding: 8px 20px;
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+}
+.vault-login-section .vault-primary {
+	border: 1px solid #1b3f6e;
+	background: #2a5d9f;
+	color: #fff;
+}
+.vault-login-section .vault-primary:hover {
+	background: #1b3f6e;
+}
+.vault-lock-note {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ppa-size-sm, 12px);
+	opacity: 0.85;
+}
+.vault-lock-note svg {
+	flex: none;
+}
+.vault-divider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	max-width: 900px;
+	opacity: 0.85;
+}
+.vault-divider::before,
+.vault-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: rgba(128, 128, 128, 0.45);
+}
+.vault-save {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	box-sizing: border-box;
+	max-width: 560px;
+	padding: 12px;
+	border: 1px solid rgba(128, 128, 128, 0.3);
+	background: rgba(128, 128, 128, 0.08);
+}
+.vault-save-check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-weight: 700;
+}
+.vault-save-check input {
+	width: 18px;
+	height: 18px;
+	margin: 0;
+}
+.vault-save-label {
+	padding-inline-start: 26px;
+}
+.vault-save-label > label {
+	font-weight: normal;
+}
+.vault-hint {
+	font-size: var(--ppa-size-sm, 12px);
+	opacity: 0.85;
+}
+
+/* Access tags and the failed-password warning. Dark themes override the
+ * colours (themes/dark/global.css). */
+.vault-tag {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 3px;
+	font-size: var(--ppa-size-sm, 11px);
+	white-space: nowrap;
+}
+.vault-tag-ro {
+	background: #e2ecf7;
+	color: #1f4f8a;
+}
+.vault-tag-rw {
+	background: #fbe9d3;
+	color: #7a4108;
+}
+
+/* The dropdown js/vault.js builds from the <select>. */
+.vault-select {
+	position: relative;
+	max-width: 560px;
+}
+.vault-select-button {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 44px;
+	padding: 8px 12px;
+	border: 2px solid #2a5d9f;
+	background: #fff;
+	color: #1a1a1a;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+.vault-select-button svg {
+	flex: none;
+	transition: transform 0.15s;
+}
+.vault-select-button[aria-expanded="true"] svg {
+	transform: rotate(180deg);
+}
+.vault-select-value {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.vault-select-user {
+	opacity: 0.8;
+}
+.vault-select-list {
+	position: absolute;
+	z-index: 20;
+	inset-inline: 0;
+	top: calc(100% + 2px);
+	max-height: 24em;
+	overflow: auto;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 4px 0;
+	list-style: none;
+	border: 1px solid #b9b49c;
+	background: #fff;
+	color: #1a1a1a;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+	outline: none;
+}
+.vault-select-group {
+	padding: 10px 12px 4px;
+	color: #4a4838;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+	text-transform: uppercase;
+}
+.vault-option ~ .vault-select-group {
+	margin-top: 4px;
+	border-top: 1px solid #e0dcc8;
+}
+.vault-option {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 28px;
+	padding: 8px 12px;
+	cursor: pointer;
+}
+.vault-option-main {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.vault-option-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.vault-option-title svg {
+	flex: none;
+}
+.vault-option-meta {
+	color: #4a4838;
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+.vault-option-failed {
+	background: #fdf3ea;
+}
+.vault-option-failed .vault-option-title svg,
+.vault-option-failed .vault-option-meta,
+.vault-option-failed .vault-option-meta a {
+	color: #9a3412;
+}
+.vault-option[aria-selected="true"] {
+	background: #e2ecf7;
+}
+.vault-option-active {
+	outline: 2px solid #2a5d9f;
+	outline-offset: -2px;
+}
+.vault-select-button:focus-visible,
+.vault-login-section .vault-primary:focus-visible {
+	outline: 2px solid #2a5d9f;
+	outline-offset: 2px;
+}
+
+/* ---- end login vault ---- */
+/* ---- My saved logins (vault.php) ---- */
+.vault-page {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	max-width: 1180px;
+}
+.vault-page h2,
+.vault-page h3,
+.vault-page p {
+	margin: 0;
+}
+.vault-page section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.vault-table-wrap {
+	overflow-x: auto;
+	border: 1px solid #cfcab4;
+}
+.vault-table {
+	border-collapse: collapse;
+	width: 100%;
+	min-width: 760px;
+}
+.vault-table th,
+.vault-table td {
+	padding: 8px 10px;
+	text-align: left;
+	border-bottom: 1px solid #ece9d8;
+	vertical-align: middle;
+}
+.vault-table thead th {
+	background: #ddd9c3;
+	border-bottom-color: #cfcab4;
+}
+.vault-table .vault-group {
+	padding: 6px 10px;
+	background: #f6f5ee;
+	border-bottom-color: #e0dcc8;
+	font-size: var(--ppa-size-sm, 12px);
+}
+.vault-group span {
+	font-weight: 400;
+}
+.vault-label {
+	font-weight: 700;
+}
+.vault-mono {
+	font-family: 'DejaVu Sans Mono', Menlo, monospace;
+}
+.vault-row-failed {
+	background: #fdf3ea;
+}
+.vault-status {
+	padding: 1px 6px;
+	border-radius: 3px;
+	font-size: var(--ppa-size-sm, 11px);
+	white-space: nowrap;
+}
+.vault-status-ok {
+	background: #e3f0dc;
+	color: #2b5a1f;
+}
+.vault-status-failed {
+	background: #fdecdc;
+	border: 1px solid #f0c9a8;
+	color: #7c2d12;
+}
+.vault-actions {
+	white-space: nowrap;
+}
+.vault-fix {
+	font-weight: 700;
+}
+.vault-delete-link {
+	color: #9a3412;
+}
+.vault-expires {
+	color: #7c2d12;
+	font-weight: 700;
+}
+.vault-note {
+	font-size: var(--ppa-size-sm, 12px);
+}
+.vault-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	max-width: 460px;
+}
+.vault-form p {
+	margin: 0;
+}
+.vault-form input[type="text"],
+.vault-form input[type="password"] {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 36px;
+	padding: 6px 8px;
+	font: inherit;
+}
+.vault-access {
+	display: flex;
+	gap: 16px;
+	margin: 0;
+	padding: 6px 10px 8px;
+}
+.vault-form .vault-primary {
+	font-weight: 700;
+}
+/* ---- end my saved logins ---- */
+/* ---- Shared logins (vault_admin.php, board 4) ---- */
+.vault-admin {
+	max-width: none;
+}
+.vault-admin-head {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	justify-content: space-between;
+	align-items: center;
+	padding: 10px 14px;
+	background: #ece9d8;
+	border: 1px solid #cfcab4;
+}
+.vault-admin-head .vault-intro {
+	margin-top: 4px;
+}
+.vault-button {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	box-sizing: border-box;
+	padding: 8px 18px;
+	background: #2a5d9f;
+	color: #fff;
+	border: 1px solid #1b3f6e;
+	font-weight: 700;
+	text-decoration: none;
+}
+a.vault-button:link,
+a.vault-button:visited,
+a.vault-button:hover,
+a.vault-button:active {
+	color: #fff;
+	text-decoration: none;
+}
+a.vault-button:hover,
+a.vault-button:focus-visible {
+	background: #1b3f6e;
+}
+.vault-admin-body {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+	align-items: flex-start;
+}
+.vault-admin-list {
+	flex: 999 1 600px;
+	min-width: 0;
+}
+.vault-table .vault-row-selected {
+	background: #e2ecf7;
+}
+.vault-muted {
+	color: #4a4838;
+}
+.vault-panel {
+	flex: 1 1 340px;
+	max-width: 420px;
+	box-sizing: border-box;
+	border: 1px solid #cfcab4;
+	display: flex;
+	flex-direction: column;
+}
+.vault-panel h3,
+.vault-panel h4,
+.vault-panel p {
+	margin: 0;
+}
+.vault-panel h4 {
+	font-size: inherit;
+}
+.vault-panel-head {
+	padding: 10px 14px;
+	background: #ece9d8;
+	border-bottom: 1px solid #cfcab4;
+}
+.vault-panel-head p {
+	margin-top: 2px;
+	font-size: var(--ppa-size-sm, 12px);
+}
+.vault-panel-part {
+	padding: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	border-bottom: 1px solid #e0dcc8;
+}
+.vault-panel-part:last-child {
+	border-bottom: 0;
+}
+.vault-share-form input[type="text"],
+.vault-share-form input[type="date"] {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 36px;
+	padding: 6px 8px;
+	font: inherit;
+}
+.vault-share-form .vault-primary,
+.vault-remove {
+	min-height: 32px;
+	padding: 4px 14px;
+	font: inherit;
+	cursor: pointer;
+}
+.vault-share-form .vault-primary {
+	min-height: 44px;
+	padding: 8px 18px;
+	font-weight: 700;
+	background: #2a5d9f;
+	color: #fff;
+	border: 1px solid #1b3f6e;
+}
+.vault-share-form .vault-primary:hover {
+	background: #1b3f6e;
+}
+.vault-shares,
+.vault-activity {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.vault-shares li {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 0;
+	border-bottom: 1px solid #ece9d8;
+}
+.vault-shares li:last-child {
+	border-bottom: 0;
+}
+.vault-share-who {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.vault-share-meta {
+	font-size: var(--ppa-size-sm, 12px);
+}
+.vault-share-meta.vault-expires {
+	font-weight: 400;
+}
+.vault-share-expired .vault-share-who {
+	opacity: 0.75;
+}
+.vault-remove {
+	background: #fff;
+	color: #9a3412;
+	border: 1px solid #e3b493;
+}
+.vault-activity {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.vault-panel-links {
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.vault-audit-filter {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: flex-end;
+}
+.vault-audit-filter input[type="text"],
+.vault-audit-filter select {
+	min-height: 32px;
+	font: inherit;
+}
+.vault-nowrap {
+	white-space: nowrap;
+}
+.vault-kv {
+	display: block;
+	font-family: var(--ppa-mono, 'DejaVu Sans Mono', Menlo, monospace);
+	font-size: var(--ppa-size-sm, 12px);
+	overflow-wrap: anywhere;
+}
+/* ---- end shared logins ---- */
+/* ---- Manage servers (servers_admin.php) ---- */
+.vault-lock {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.vault-lock svg {
+	flex: none;
+}
+.vault-status-off {
+	background: #eceae0;
+	border: 1px solid #cfcab4;
+	color: #4a463a;
+}
+.vault-inline {
+	display: inline;
+	margin: 0;
+}
+.vault-linkbtn {
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	color: #2a5d9f;
+	text-decoration: underline;
+	cursor: pointer;
+}
+.vault-linkbtn:focus-visible {
+	outline: 2px solid #2a5d9f;
+	outline-offset: 2px;
+}
+.vault-row-off td {
+	opacity: 0.8;
+}
+.vault-impact {
+	margin: 0;
+	padding-inline-start: 20px;
+}
+.vault-form select {
+	min-height: 32px;
+}
+.vault-form input[type="number"] {
+	box-sizing: border-box;
+	width: 8em;
+	min-height: 36px;
+	padding: 6px 8px;
+	font: inherit;
+}
+.vault-form .vault-test {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 420px;
+	padding: 10px 14px;
+	border: 1px solid #cfcab4;
+}
+/* ---- end manage servers ---- */

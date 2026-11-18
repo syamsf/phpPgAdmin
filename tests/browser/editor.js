@@ -41,6 +41,7 @@ async function run(page, key = 'Control') {
 		defaultViewport: { width: 1280, height: 900 },
 	});
 	const page = await browser.newPage();
+	await page.setExtraHTTPHeaders({'Remote-User': 'ppa-test', 'Remote-Groups': 'role-admin'});
 	// Pages re-wrap themselves in the old frameset when opened directly;
 	// pretend to be a popup so they render standalone (like in the new shell).
 	await page.evaluateOnNewDocument(() => {

@@ -232,6 +232,9 @@
 			headers: method === 'GET' ? { 'X-PPA-Partial': '1' } : { 'X-PPA-Partial': '1', 'X-PPA-CSRF': csrfToken() },
 			signal: ctrl ? ctrl.signal : undefined
 		}).then(function (res) {
+			// Signed out (or timed out): the server says where to sign in.
+			var go = res.headers.get('X-PPA-Signin');
+			if (go) { finish(); location.href = go; return; }
 			var type = res.headers.get('Content-Type') || '';
 			var disposition = res.headers.get('Content-Disposition') || '';
 			if (!/text\/html/i.test(type) || /attachment/i.test(disposition)) {
@@ -460,6 +463,8 @@
 		progress(true);
 		return fetch(url, { credentials: 'same-origin', headers: { 'X-PPA-Partial': '1' } })
 			.then(function (res) {
+				var go = res.headers.get('X-PPA-Signin');
+				if (go) { progress(false); location.href = go; return new Promise(function () {}); }
 				if (!/text\/html/i.test(res.headers.get('Content-Type') || '')) throw new Error('not a page');
 				return res.text().then(function (html) { return { html: html, url: res.url || url }; });
 			})
@@ -575,7 +580,11 @@
 
 		fetch(url, { method: method === 'get' ? 'GET' : 'POST', body: body, credentials: 'same-origin',
 			headers: method === 'get' ? { 'X-PPA-Partial': '1' } : { 'X-PPA-Partial': '1', 'X-PPA-CSRF': csrfToken() } })
-			.then(function (res) { return res.text().then(function (html) { return { html: html, url: res.url || url }; }); })
+			.then(function (res) {
+				var go = res.headers.get('X-PPA-Signin');
+				if (go) { progress(false); location.href = go; return new Promise(function () {}); }
+				return res.text().then(function (html) { return { html: html, url: res.url || url }; });
+			})
 			.then(function (r) {
 				progress(false);
 				if (!dialog) return;

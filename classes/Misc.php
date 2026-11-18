@@ -565,6 +565,9 @@
 			global $lang, $conf, $misc, $_connection, $postgresqlMinVer;
 
 			$server_info = $this->getServerInfo($server_id);
+			// A saved login's password is decrypted here, for this connection
+			// only; it is never in the session.
+			$password = $this->loginPassword($server_info);
 
 			// Perform extra security checks if this config option is set
 			if ($conf['extra_login_security']) {
@@ -574,7 +577,7 @@
 
 				$username = strtolower($server_info['username']);
 
-				if ($server_info['password'] == '' || in_array($username, $bad_usernames)) {
+				if ($password == '' || in_array($username, $bad_usernames)) {
 					unset($_SESSION['webdbLogin'][$_REQUEST['server']]);
 					$msg = $lang['strlogindisallowed'];
 					include('./login.php');
@@ -616,11 +619,13 @@
 				$server_info['port'],
 				$server_info['sslmode'],
 				$server_info['username'],
-				$server_info['password'],
+				$password,
 				$database,
 				ADODB_FETCH_ASSOC,
 				$server_info['sslrootcert'] ?? ''
 			);
+
+			unset($password);
 
 			// Don't hand these to child processes (pg_dump).
 			foreach ($_saved_env as $_name => $_value)
@@ -643,6 +648,8 @@
 			$data = new $_type($_connection->conn);
 			$data->platform = $_connection->platform;
 
+			$this->vaultAfterConnect($server_info, $server_id);
+
 			// Only needed when the startup settings above didn't apply.
 			if (pg_parameter_status($_connection->conn->_connectionID, 'client_encoding') !== 'UTF8') {
 				$data->execute("SET client_encoding TO 'UTF-8'");
@@ -655,6 +662,101 @@
 			return $data;
 		}
 
+
+		/**
+		 * The login target's vault server key and the database its saved
+		 * logins are for (its defaultdb), see VaultCredentials.
+		 * @return array (key, database)
+		 */
+		static function vaultScope(array $info) {
+			return array((string) ($info['key'] ?? ''), (string) ($info['defaultdb'] ?? 'postgres'));
+		}
+
+		/**
+		 * The password to connect with. For a saved login it is decrypted
+		 * from the vault now, after checking the user may still use it;
+		 * otherwise it is the one typed at login. A saved login that was
+		 * deleted, unshared, or moved to another server since, or that
+		 * can't be decrypted, ends this login and shows the login page.
+		 * @param $info array the login, from getServerInfo()
+		 * @return string
+		 */
+		function loginPassword(array $info) {
+			global $lang, $conf, $misc, $vault;
+
+			if (!isset($info['vault_credential']))
+				return isset($info['password']) ? (string) $info['password'] : '';
+
+			list($key, $database) = self::vaultScope($info);
+			$row = null;
+			if (isset($vault) && $vault->identity !== null) {
+				$row = $vault->creds->canUse($vault->identity, (string) $info['vault_credential'], VaultStore::now());
+				if ($row !== null && ($row['server_id'] !== $key || $row['database'] !== $database
+						|| $row['pg_username'] !== ($info['username'] ?? null)))
+					$row = null;
+			}
+			$msg = $lang['strvaultloginrevoked'];
+			if ($row !== null) {
+				try {
+					return $vault->creds->password($row);
+				} catch (VaultError $e) {
+					$msg = $lang['strvaultlogindecrypt'];
+				}
+			}
+
+			unset($_SESSION['webdbLogin'][self::getServerId($info)]);
+			include('./login.php');
+			exit;
+		}
+
+		/**
+		 * Runs after a successful connection, once per session login: the
+		 * login_used audit row, the saved login's last use, and saving a
+		 * typed login when "Save this login" was ticked (only now that we
+		 * know it works).
+		 * @param $info array the login, from getServerInfo()
+		 * @param $server_id string the server id, or null for the current one
+		 */
+		function vaultAfterConnect(array $info, $server_id = null) {
+			global $vault, $lang;
+
+			if (!empty($info['vault_logged']) || !isset($vault) || $vault->identity === null)
+				return;
+			$this->setServerInfo('vault_logged', true, $server_id);
+
+			$who = $vault->identity;
+			$credential = isset($info['vault_credential']) ? (string) $info['vault_credential'] : null;
+			list($key, $database) = self::vaultScope($info);
+			try {
+				$vault->audit->log($who->username, VaultAudit::LOGIN_USED, array(
+					'credential_id' => $credential,
+					'server_id' => $key,
+					'database' => $database,
+					'detail' => array('pg_username' => (string) $info['username'], 'manual' => $credential === null),
+				));
+				if ($credential !== null)
+					$vault->creds->markUsed($credential, VaultStore::now());
+
+				if (isset($info['vault_save_label'])) {
+					$this->setServerInfo('vault_save_label', null, $server_id);
+					if ($credential === null) {
+						try {
+							$vault->creds->savePersonal($who, $key, $database, (string) $info['username'],
+								(string) ($info['password'] ?? ''), (string) $info['vault_save_label']);
+						} catch (VaultError $e) {
+							// A $lang key, never the password.
+							error_log('phpPgAdmin: the login was not saved: ' . $e->getMessage());
+							$_SESSION['ppa_notice'] = $lang['strvaultnotsaved'];
+						} catch (PDOException $e) {
+							error_log('phpPgAdmin: the login was not saved: the vault database failed: ' . $e->getMessage());
+							$_SESSION['ppa_notice'] = $lang['strvaultnotsaved'];
+						}
+					}
+				}
+			} catch (PDOException $e) {
+				error_log('phpPgAdmin: the vault database failed: ' . $e->getMessage());
+			}
+		}
 
 		/**
 		 * Prints the page header.  If global variable $_no_output is
@@ -803,6 +905,13 @@
 						if (!$this->isPartialRequest()) $this->printSidebar();
 						echo "<main id=\"ppa-main\" tabindex=\"-1\">\n";
 						$this->shellOpen = true;
+						// A message left for the next page, e.g. a login that
+						// worked but couldn't be saved (vaultAfterConnect).
+						if (isset($_SESSION['ppa_notice'])) {
+							if (is_string($_SESSION['ppa_notice']) && $_SESSION['ppa_notice'] !== '')
+								echo "<p class=\"message error\" role=\"alert\">", htmlspecialchars($_SESSION['ppa_notice']), "</p>\n";
+							unset($_SESSION['ppa_notice']);
+						}
 					}
 				}
 			}
@@ -960,7 +1069,7 @@
 		 * @param $section The name of the tab bar.
 		 */
 		function getNavTabs($section) {
-			global $data, $lang, $conf, $plugin_manager;
+			global $data, $lang, $conf, $plugin_manager, $vault;
 
 			$hide_advanced = ($conf['show_advanced'] === false);
 			$tabs = array();
@@ -977,6 +1086,30 @@
 							'title' => $lang['strservers'],
 							'url'   => "servers.php",
 							'icon'  => 'Servers',
+						),
+						'vault' => array (
+							'title' => $lang['strvaultmylogins'],
+							'url'   => 'vault.php',
+							'icon'  => 'Users',
+						),
+						'shared' => array (
+							'title' => $lang['strvaultsharedlogins'],
+							'url'   => 'vault_admin.php',
+							'icon'  => 'Users',
+							'hide'  => !(isset($vault) && $vault->identity !== null && $vault->identity->isAdmin),
+						),
+						'serversadmin' => array (
+							'title' => $lang['strvaultserversadmin'],
+							'url'   => 'servers_admin.php',
+							'icon'  => 'Servers',
+							'hide'  => !(isset($vault) && $vault->identity !== null && $vault->identity->isAdmin),
+						),
+						'vaultusers' => array (
+							'title' => $lang['strvaultusers'],
+							'url'   => 'vault_users.php',
+							'icon'  => 'Users',
+							'hide'  => !(isset($vault) && $vault->identity !== null && $vault->identity->isAdmin
+								&& $vault->config['auth_mode'] === 'local'),
 						),
 					);
 					break;
@@ -1671,6 +1804,32 @@
 			}
 			else {
 				echo "<span class=\"appname\">{$appName}</span> <span class=\"version\">{$appVersion}</span></div>\n";
+			}
+			$this->printTopbarUser();
+			echo "</div>\n";
+		}
+
+		/**
+		 * Who is signed in to the app (not to a server), at the right of the
+		 * top bar: name, the admin group for admins, how they signed in, and
+		 * Sign out where there is somewhere to sign out to.
+		 */
+		function printTopbarUser() {
+			global $lang, $vault;
+
+			if (!isset($vault) || !$vault->identity) return;
+			$identity = $vault->identity;
+
+			echo "<div class=\"topbar-user\">";
+			echo "<svg class=\"topbar-user-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><circle cx=\"12\" cy=\"8\" r=\"4\"></circle><path d=\"M4 21c0-4 4-6 8-6s8 2 8 6\"></path></svg>";
+			echo "<strong>", htmlspecialchars($identity->username), "</strong>";
+			if ($identity->isAdmin)
+				echo "<span class=\"vault-chip\">", htmlspecialchars($vault->config['admin_group']), "</span>";
+			$local = $identity->mode === 'local';
+			echo "<span class=\"topbar-user-via\">", htmlspecialchars($local ? $lang['strvaultlocalaccount'] : $lang['strvaultviasso']), "</span>";
+			if ($local || $vault->config['signout_url'] !== '') {
+				echo "<form method=\"post\" action=\"signout.php\" class=\"topbar-signout\">", $this->csrfField(),
+					"<button type=\"submit\">", htmlspecialchars($lang['strvaultsignout']), "</button></form>";
 			}
 			echo "</div>\n";
 		}

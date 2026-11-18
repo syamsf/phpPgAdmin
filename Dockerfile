@@ -41,7 +41,8 @@ RUN set -eux; \
 	sed -ri 's/^ServerTokens .*/ServerTokens Prod/; s/^ServerSignature .*/ServerSignature Off/' \
 		/etc/apache2/conf-available/security.conf; \
 	echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf; \
-	a2enconf servername
+	a2enconf servername; \
+	install -d -o www-data -g www-data -m 0700 /data
 
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 COPY docker/php.ini "$PHP_INI_DIR/conf.d/zz-phppgadmin.ini"
