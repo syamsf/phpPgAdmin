@@ -111,7 +111,22 @@ function test_conf_servers_appends_active_ui_only() {
 	assert_same('main', $out[0]['key']);
 	assert_same('env', $out[0]['source']);
 	assert_same(array('desc' => 'Live', 'host' => 'h', 'port' => 6432, 'sslmode' => 'prefer', 'defaultdb' => 'app',
-		'key' => 'live', 'source' => 'ui', 'theme' => 'x'), $out[1]);
+		'pgbouncer' => false, 'key' => 'live', 'source' => 'ui', 'theme' => 'x'), $out[1]);
+}
+
+function test_sync_mirrors_the_pgbouncer_flag() {
+	$db = servers_db();
+	$s = servers_for($db);
+	$env = array(servers_env('Obs', 'pgb', 6432) + array('pgbouncer' => true));
+	$s->syncEnv($env, SRV_T0);
+	assert_same('1', (string)servers_row($db, 'obs')['pgbouncer']);
+	// The env entry keeps its flag in $conf['servers'] as given.
+	assert_same(true, $s->confServers($env, array())[0]['pgbouncer']);
+	unset($env[0]['pgbouncer']);
+	$s->syncEnv($env, SRV_T1);
+	$row = servers_row($db, 'obs');
+	assert_same('0', (string)$row['pgbouncer']);
+	assert_same(SRV_T1, $row['updated_at']);
 }
 
 function test_conf_servers_without_ui_when_not_allowed() {
@@ -180,6 +195,22 @@ function servers_form(array $over = array()) {
 
 function servers_audit($db, string $action) {
 	return $db->query("SELECT actor, credential_id, server_id, detail FROM audit_log WHERE action = '$action' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function test_pgbouncer_flag_on_ui_servers() {
+	$db = servers_db();
+	$s = servers_for($db);
+	$s->add(servers_form(array('pgbouncer' => '1')), 'boss');
+	assert_same('1', (string)servers_row($db, 'extra')['pgbouncer']);
+	assert_same(true, $s->confServers(array(), array())[0]['pgbouncer']);
+	assert_same(true, json_decode(servers_audit($db, 'server_added')[0]['detail'], true)['pgbouncer']);
+	// It doesn't move the server: it can change while the server holds logins.
+	servers_credential($db, 'extra');
+	$s->update('extra', servers_form(), 'boss');
+	assert_same('0', (string)servers_row($db, 'extra')['pgbouncer']);
+	assert_same(false, $s->confServers(array(), array())[0]['pgbouncer']);
+	$changed = json_decode(servers_audit($db, 'server_changed')[0]['detail'], true)['changed'];
+	assert_same(array('pgbouncer'), array_keys($changed));
 }
 
 function test_add_inserts_ui_row_and_audits() {

@@ -559,6 +559,43 @@
 		}
 
 		/**
+		 * The settings for the connection's startup packet, as name=value
+		 * strings for PGOPTIONS ("-c name=value"). They cost no extra
+		 * statement after connecting.
+		 *
+		 * None for a server behind PgBouncer ($server_info['pgbouncer']):
+		 * PgBouncer refuses the connection, before it checks the password, if
+		 * the packet has a setting it doesn't track (statement_timeout and
+		 * bytea_output aren't tracked), and before 1.20 it refuses any options
+		 * at all. Setting statement_timeout with SET after connecting instead
+		 * isn't safe there: with transaction pooling it would stay on the
+		 * server connection and apply to whichever client gets it next. Such a
+		 * server runs without statement_timeout; PgBouncer's own query_timeout
+		 * is the place for a limit.
+		 * @param $server_info array the login, from getServerInfo()
+		 * @param $conf array the config ('statement_timeout')
+		 * @return array e.g. array('DateStyle=ISO', 'statement_timeout=5min')
+		 */
+		static function startupOptions(array $server_info, array $conf) {
+			if (!empty($server_info['pgbouncer']))
+				return array();
+
+			$options = array('DateStyle=ISO');
+			// bytea_output only exists from 9.0 on, and the version is only
+			// known once we have connected to this server before.
+			if (isset($server_info['pgVersion']) && version_compare($server_info['pgVersion'], '9.0', '>='))
+				$options[] = 'bytea_output=escape';
+			if (isset($conf['statement_timeout']) && $conf['statement_timeout'] !== '') {
+				$timeout = preg_replace('/\s+/', '', (string) $conf['statement_timeout']);
+				if (preg_match('/^[0-9]+(ms|s|min|h|d)?$/', $timeout))
+					$options[] = "statement_timeout={$timeout}";
+				else
+					trigger_error("Ignoring invalid \$conf['statement_timeout']", E_USER_WARNING);
+			}
+			return $options;
+		}
+
+		/**
 		 * Creates a database accessor
 		 */
 		function getDatabaseAccessor($database, $server_id = null) {
@@ -590,22 +627,13 @@
 			// it is) instead of costing a SET statement each after connecting.
 			// We work on UTF-8 only encoding.
 			$startup = array('PGCLIENTENCODING' => 'UTF8');
-			$options = array('DateStyle=ISO');
-			// bytea_output only exists from 9.0 on, and the version is only
-			// known once we have connected to this server before.
-			$bytea_at_startup = isset($server_info['pgVersion'])
-				&& version_compare($server_info['pgVersion'], '9.0', '>=');
-			if ($bytea_at_startup)
-				$options[] = 'bytea_output=escape';
-			if (isset($conf['statement_timeout']) && $conf['statement_timeout'] !== '') {
-				$_timeout = preg_replace('/\s+/', '', (string) $conf['statement_timeout']);
-				if (preg_match('/^[0-9]+(ms|s|min|h|d)?$/', $_timeout))
-					$options[] = "statement_timeout={$_timeout}";
-				else
-					trigger_error("Ignoring invalid \$conf['statement_timeout']", E_USER_WARNING);
+			$pgbouncer = !empty($server_info['pgbouncer']);
+			$options = self::startupOptions($server_info, $conf);
+			$bytea_at_startup = in_array('bytea_output=escape', $options, true);
+			if ($options) {
+				$_prev_options = getenv('PGOPTIONS');
+				$startup['PGOPTIONS'] = trim(($_prev_options === false ? '' : $_prev_options) . ' -c ' . implode(' -c ', $options));
 			}
-			$_prev_options = getenv('PGOPTIONS');
-			$startup['PGOPTIONS'] = trim(($_prev_options === false ? '' : $_prev_options) . ' -c ' . implode(' -c ', $options));
 
 			$_saved_env = array();
 			foreach ($startup as $_name => $_value) {
@@ -655,7 +683,16 @@
 				$data->execute("SET client_encoding TO 'UTF-8'");
 			}
 
-			if ($data->hasByteaHexDefault() && !$bytea_at_startup) {
+			if ($pgbouncer) {
+				// PgBouncer keeps DateStyle per client, so this SET doesn't
+				// reach the other clients that share its server connections.
+				// bytea_output is left alone (bytea shows as hex): PgBouncer
+				// doesn't track it, so with transaction pooling a SET would
+				// stay on the server connection that another client gets next.
+				$_datestyle = pg_parameter_status($_connection->conn->_connectionID, 'DateStyle');
+				if ($_datestyle === false || strncmp($_datestyle, 'ISO', 3) !== 0)
+					$data->execute("SET DateStyle TO ISO");
+			} elseif ($data->hasByteaHexDefault() && !$bytea_at_startup) {
 				$data->execute("SET bytea_output TO escape");
 			}
 
@@ -3033,7 +3070,12 @@
 				if ($server_info === null)
 					return null;
 
-				return array_merge($server_info, $_SESSION['webdbLogin'][$server_id ?? '']);
+				// How to connect comes from the config, not from what the
+				// session held at login: a server switched to PgBouncer since
+				// must not get the startup options it would refuse.
+				$login = $_SESSION['webdbLogin'][$server_id ?? ''];
+				unset($login['pgbouncer']);
+				return array_merge($server_info, $login);
 			}
 
 			if ($server_info !== null) {

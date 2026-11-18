@@ -28,7 +28,9 @@ if (!function_exists('ppa_env')) {
 
 	// "Production=db1.internal:5432, Staging=db2.internal, [::1]:5433"
 	// A "?sslmode=require" suffix sets the sslmode of that one server (it
-	// otherwise follows PPA_SSLMODE).
+	// otherwise follows PPA_SSLMODE). "?pgbouncer=1" marks a server behind
+	// PgBouncer, which gets no startup options (see Misc::startupOptions).
+	// Both together: "?sslmode=require&pgbouncer=1".
 	// A "/db1+db2" suffix gives each of those databases its own login:
 	// "Shop=db3.internal:5432/orders+billing"
 	function ppa_parse_servers($list)
@@ -42,9 +44,25 @@ if (!function_exists('ppa_env')) {
 			}
 
 			$sslmode = null;
-			if (preg_match('/\?sslmode=([a-z-]+)$/', $entry, $m)) {
-				$sslmode = $m[1];
+			$pgbouncer = false;
+			if (preg_match('/\?([^?]*)$/', $entry, $m)) {
 				$entry = substr($entry, 0, -strlen($m[0]));
+				foreach (explode('&', $m[1]) as $setting) {
+					if ($setting === '') {
+						continue;
+					}
+					$parts = explode('=', $setting, 2);
+					$value = isset($parts[1]) ? $parts[1] : null;
+					if ($parts[0] === 'sslmode' && $value !== null) {
+						$sslmode = $value;
+					} elseif ($parts[0] === 'pgbouncer') {
+						// A bare "?pgbouncer" means on too.
+						$pgbouncer = $value === null
+							|| in_array(strtolower($value), array('1', 'true', 'yes', 'on'), true);
+					} else {
+						trigger_error("PPA_SERVERS: ignoring \"{$setting}\" (use sslmode=... or pgbouncer=1)", E_USER_WARNING);
+					}
+				}
 			}
 
 			$databases = array();
@@ -71,6 +89,9 @@ if (!function_exists('ppa_env')) {
 			);
 			if ($sslmode !== null) {
 				$server['sslmode'] = $sslmode;
+			}
+			if ($pgbouncer) {
+				$server['pgbouncer'] = true;
 			}
 			if ($databases) {
 				$server['databases'] = $databases;

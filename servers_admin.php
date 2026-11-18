@@ -138,7 +138,12 @@
 				echo htmlspecialchars($lang['strvaultsourceui']);
 			}
 			echo "</td>\n";
-			echo "<td class=\"vault-mono\">", htmlspecialchars(vaultHostPort($row)), "</td>\n";
+			echo "<td class=\"vault-mono\">", htmlspecialchars(vaultHostPort($row));
+			if (!empty($row['pgbouncer'])) {
+				echo " <span class=\"vault-muted\" title=\"", htmlspecialchars($lang['strvaultpgbouncerhint']), "\">",
+					htmlspecialchars($lang['strvaultpgbouncertag']), "</span>";
+			}
+			echo "</td>\n";
 			echo "<td>", htmlspecialchars($row['sslmode']), "</td>\n";
 			echo "<td>", htmlspecialchars(vaultLoginsText($row)), "</td>\n";
 			echo "<td>", $status, "</td>\n";
@@ -321,6 +326,8 @@
 		echo "<div class=\"vault-field\"><label for=\"vault-sdb\">", htmlspecialchars($lang['strvaultdefaultdb']), "</label>",
 			"<input type=\"text\" id=\"vault-sdb\" name=\"default_db\" maxlength=\"63\" required=\"required\" value=\"", htmlspecialchars($f['default_db']), "\" />",
 			"<span class=\"vault-hint\">", htmlspecialchars($lang['strvaultdefaultdbhint']), "</span></div>\n";
+		echo "<div class=\"vault-field\"><label><input type=\"checkbox\" name=\"pgbouncer\" value=\"1\"", $f['pgbouncer'] ? ' checked="checked"' : '', " /> ",
+			htmlspecialchars($lang['strvaultpgbouncer']), "</label><span class=\"vault-hint\">", htmlspecialchars($lang['strvaultpgbouncerhint']), "</span></div>\n";
 		echo "<div class=\"vault-field\"><label><input type=\"checkbox\" name=\"enabled\" value=\"1\"", $f['enabled'] ? ' checked="checked"' : '', " /> ",
 			htmlspecialchars($lang['strenabled']), "</label><span class=\"vault-hint\">", htmlspecialchars($lang['strvaultenabledhint']), "</span></div>\n";
 
@@ -348,7 +355,7 @@
 	function vaultFormFrom($row) {
 		return array('key' => $row['key'], 'name' => $row['name'], 'host' => $row['host'], 'port' => (string) $row['port'],
 			'sslmode' => $row['sslmode'] === '' ? 'prefer' : $row['sslmode'], 'default_db' => $row['default_db'],
-			'enabled' => $row['status'] === 'active');
+			'pgbouncer' => !empty($row['pgbouncer']), 'enabled' => $row['status'] === 'active');
 	}
 
 	/** What the form posted. */
@@ -360,13 +367,14 @@
 			'port' => trim(vaultPost('port')),
 			'sslmode' => vaultPost('sslmode'),
 			'default_db' => trim(vaultPost('default_db')),
+			'pgbouncer' => vaultPost('pgbouncer') !== '',
 			'enabled' => vaultPost('enabled') !== '',
 		);
 	}
 
 	function doAddForm() {
 		vaultServerForm('', array('key' => '', 'name' => '', 'host' => '', 'port' => '5432', 'sslmode' => 'require',
-			'default_db' => 'postgres', 'enabled' => true));
+			'default_db' => 'postgres', 'pgbouncer' => false, 'enabled' => true));
 	}
 
 	function doEditForm() {

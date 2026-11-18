@@ -3,11 +3,22 @@
 require_once(__DIR__ . '/VaultError.php');
 
 /**
- * Opens the login vault's SQLite file and applies the schema on first use.
+ * Opens the login vault's SQLite file, applies the schema on first use and
+ * brings a file made by an older release up to date.
  */
 class VaultStore {
 
-	const SCHEMA_VERSION = 1;
+	const SCHEMA_VERSION = 2;
+
+	/**
+	 * How a file made by an older release gets to SCHEMA_VERSION: the SQL
+	 * that takes it from version n - 1 to n. A new file gets the whole
+	 * schema file instead, which already has all of these.
+	 */
+	const MIGRATIONS = array(
+		// Servers behind PgBouncer get no startup options (see Misc::startupOptions).
+		2 => 'ALTER TABLE servers ADD COLUMN pgbouncer INTEGER NOT NULL DEFAULT 0 CHECK (pgbouncer IN (0, 1))',
+	);
 
 	/**
 	 * Open (and create, if needed) the vault database at $path.
@@ -34,17 +45,22 @@ class VaultStore {
 			$pdo->exec('PRAGMA foreign_keys=ON');
 
 			$version = (int)$pdo->query('PRAGMA user_version')->fetchColumn();
-			if ($version === 0) {
-				$sql = file_get_contents(__DIR__ . '/schema.sqlite.sql');
-				if ($sql === false) {
-					throw new VaultError("Can't read the vault schema file.");
-				}
-				self::transaction($pdo, function () use ($pdo, $sql) {
-					// Another process may have applied it while we waited for the lock.
-					if ((int)$pdo->query('PRAGMA user_version')->fetchColumn() === 0) {
+			if ($version < self::SCHEMA_VERSION) {
+				self::transaction($pdo, function () use ($pdo) {
+					// Another process may have done it while we waited for the lock.
+					$version = (int)$pdo->query('PRAGMA user_version')->fetchColumn();
+					if ($version === 0) {
+						$sql = file_get_contents(__DIR__ . '/schema.sqlite.sql');
+						if ($sql === false) {
+							throw new VaultError("Can't read the vault schema file.");
+						}
 						$pdo->exec($sql);
-						$pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
+					} else {
+						for ($n = $version + 1; $n <= self::SCHEMA_VERSION; $n++) {
+							$pdo->exec(self::MIGRATIONS[$n]);
+						}
 					}
+					$pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
 				});
 			}
 			return $pdo;

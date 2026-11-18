@@ -45,6 +45,8 @@ function loginErrorDetail($errmsg) {
 function loginErrorReasonKey($detail) {
 	global $lang;
 	$cases = array(
+		// PgBouncer, before it looks at the login (see Misc::startupOptions).
+		'/unsupported startup parameter/i' => 'strloginpgbouncer',
 		'/password authentication failed|authentication failed for user|no password supplied|password is required/i' => 'strloginbadpassword',
 		'/no pg_hba\.conf entry|pg_hba\.conf rejects/i' => 'strloginhba',
 		'/role "[^"]*" does not exist/i' => 'strloginnorole',

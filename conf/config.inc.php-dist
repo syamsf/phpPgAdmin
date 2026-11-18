@@ -40,6 +40,11 @@
 	// and a login for one of them can only use that database.
 	//$conf['servers'][0]['databases'] = array('orders', 'billing');
 
+	// Set this when host:port is a PgBouncer. PgBouncer refuses a connection
+	// that asks for settings it can't track, so none are sent: no
+	// statement_timeout (below) for this server, and bytea shows as hex.
+	//$conf['servers'][0]['pgbouncer'] = true;
+
 	// Example for a second server (PostgreSQL for Windows)
 	//$conf['servers'][1]['desc'] = 'Test Server';
 	//$conf['servers'][1]['host'] = '127.0.0.1';

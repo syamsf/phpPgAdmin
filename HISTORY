@@ -29,6 +29,12 @@ Features:
   counting
 * New settings: statement_timeout (PPA_STATEMENT_TIMEOUT), max_result_rows
   (PPA_MAX_RESULT_ROWS, default 1000); PGCONNECT_TIMEOUT defaults to 10s
+* Servers behind PgBouncer ("?pgbouncer=1" in PPA_SERVERS,
+  $conf['servers'][n]['pgbouncer'], or "Behind PgBouncer" on Manage servers)
+  get no settings in the connection request. PgBouncer refused those
+  connections before checking the password as soon as PPA_STATEMENT_TIMEOUT
+  was set. Such servers run without statement_timeout. The login page names
+  the cause when PgBouncer refuses a connection
 * Destructive buttons on confirmation pages are red and Cancel has the focus.
   Failure messages are styled as errors. Navigation uses proper nav/list
   markup, the login form has labels, contrast fixes in the default theme

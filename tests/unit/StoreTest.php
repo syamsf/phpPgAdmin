@@ -20,10 +20,33 @@ function test_schema_applied_once() {
 	$path = unit_tmp() . '/v.sqlite';
 	VaultStore::open($path);
 	$pdo = VaultStore::open($path);
-	assert_same(1, (int)$pdo->query('PRAGMA user_version')->fetchColumn());
+	assert_same(VaultStore::SCHEMA_VERSION, (int)$pdo->query('PRAGMA user_version')->fetchColumn());
 	$tables = $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
 		->fetchAll(PDO::FETCH_COLUMN);
 	assert_same(['audit_log', 'credential_shares', 'credentials', 'servers', 'user_groups', 'users'], $tables);
+}
+
+function test_v1_file_is_migrated_and_keeps_its_rows() {
+	// A file made before the pgbouncer column: the v1 servers table.
+	$path = unit_tmp() . '/v.sqlite';
+	$v1 = new PDO('sqlite:' . $path);
+	$v1->exec('CREATE TABLE servers ("key" TEXT PRIMARY KEY, name TEXT NOT NULL, source TEXT NOT NULL, host TEXT NOT NULL,
+		port INTEGER NOT NULL DEFAULT 5432, sslmode TEXT NOT NULL DEFAULT \'\', default_db TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT \'active\', created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
+	$v1->exec("INSERT INTO servers (\"key\", name, source, host, default_db, created_at, updated_at)
+		VALUES ('obs', 'OBS', 'ui', 'pgb.internal', 'postgres', 't', 't')");
+	$v1->exec('PRAGMA user_version = 1');
+	$v1 = null;
+
+	$pdo = VaultStore::open($path);
+	assert_same(2, (int)$pdo->query('PRAGMA user_version')->fetchColumn());
+	assert_same(array('obs', 0), array_map(function ($v) { return is_numeric($v) ? (int)$v : $v; },
+		$pdo->query('SELECT "key", pgbouncer FROM servers')->fetch(PDO::FETCH_NUM)));
+	assert_throws('PDOException', function () use ($pdo) {
+		$pdo->exec("UPDATE servers SET pgbouncer = 2");
+	});
+	// Opening again changes nothing.
+	VaultStore::open($path);
 }
 
 function test_delete_server_cascades() {

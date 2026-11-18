@@ -79,6 +79,7 @@
 	$lang['strloginunreachable'] = 'The server could not be reached. Is it running, and is the address right?';
 	$lang['strloginssl'] = 'The SSL settings of the server and of phpPgAdmin don\'t match.';
 	$lang['strlogintoomany'] = 'The server has no free connections left.';
+	$lang['strloginpgbouncer'] = 'This server is a PgBouncer and refused phpPgAdmin\'s connection settings. An admin needs to mark it as behind PgBouncer.';
 	$lang['strloginnologin'] = 'This role is not allowed to log in.';
 	$lang['strserver'] = 'Server';
 	$lang['strservers'] = 'Servers';
@@ -1276,6 +1277,9 @@
 	$lang['strvaultdefaultdb'] = 'Default database';
 	$lang['strvaultdefaultdbhint'] = 'Used to list the server\'s databases.';
 	$lang['strvaultenabledhint'] = 'Turn off to hide the server and its logins without deleting them.';
+	$lang['strvaultpgbouncer'] = 'Behind PgBouncer';
+	$lang['strvaultpgbouncerhint'] = 'Turn on when this address is a PgBouncer. phpPgAdmin then sends no settings when it connects (PgBouncer refuses them), so the statement timeout doesn\'t apply here.';
+	$lang['strvaultpgbouncertag'] = 'PgBouncer';
 	$lang['strvaulttestconn'] = 'Test connection (optional)';
 	$lang['strvaulttestconnhint'] = 'Type a login just for this test. It is not saved.';
 	$lang['strvaulttestconnbtn'] = 'Test connection';

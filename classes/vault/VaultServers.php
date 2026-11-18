@@ -12,7 +12,7 @@ require_once(__DIR__ . '/VaultAudit.php');
 class VaultServers {
 
 	/** The columns compared to decide whether an env row needs a write. */
-	private const SYNCED = array('name', 'host', 'port', 'sslmode', 'default_db', 'source', 'status');
+	private const SYNCED = array('name', 'host', 'port', 'sslmode', 'default_db', 'pgbouncer', 'source', 'status');
 
 	private $db;
 	private $audit;
@@ -83,6 +83,7 @@ class VaultServers {
 				'port' => (int)($server['port'] ?? 5432),
 				'sslmode' => (string)($server['sslmode'] ?? ''),
 				'default_db' => (string)($server['defaultdb'] ?? 'postgres'),
+				'pgbouncer' => empty($server['pgbouncer']) ? 0 : 1,
 				'source' => 'env',
 				'status' => 'active',
 			);
@@ -105,12 +106,12 @@ class VaultServers {
 	private function apply(array $step, string $now): void {
 		list($op, $key, $want, $was) = $step;
 		if ($op === 'insert') {
-			$this->db->prepare('INSERT INTO servers ("key", name, source, host, port, sslmode, default_db, status, created_by, created_at, updated_at)
-				VALUES (:key, :name, :source, :host, :port, :sslmode, :default_db, :status, NULL, :now, :now)')
+			$this->db->prepare('INSERT INTO servers ("key", name, source, host, port, sslmode, default_db, pgbouncer, status, created_by, created_at, updated_at)
+				VALUES (:key, :name, :source, :host, :port, :sslmode, :default_db, :pgbouncer, :status, NULL, :now, :now)')
 				->execute(array(':key' => $key, ':now' => $now) + $this->named($want));
 		} elseif ($op === 'update') {
 			$this->db->prepare('UPDATE servers SET name = :name, host = :host, port = :port, sslmode = :sslmode,
-				default_db = :default_db, source = :source, status = :status, updated_at = :now WHERE "key" = :key')
+				default_db = :default_db, pgbouncer = :pgbouncer, source = :source, status = :status, updated_at = :now WHERE "key" = :key')
 				->execute(array(':key' => $key, ':now' => $now) + $this->named($want));
 			if ($was === 'ui') {
 				$this->audit->log('system', VaultAudit::SERVER_CHANGED, array(
@@ -149,6 +150,7 @@ class VaultServers {
 				'port' => (int)$row['port'],
 				'sslmode' => $row['sslmode'] ?: 'prefer',
 				'defaultdb' => $row['default_db'],
+				'pgbouncer' => (bool)$row['pgbouncer'],
 				'key' => $row['key'],
 				'source' => 'ui',
 			) + $uiDefaults;
@@ -210,7 +212,7 @@ class VaultServers {
 
 	/**
 	 * Adds a UI server.
-	 * @param array $f key, name, host, port, sslmode, default_db, enabled
+	 * @param array $f key, name, host, port, sslmode, default_db, pgbouncer, enabled
 	 * @throws VaultError a field is wrong, the key is taken or the host:port:sslmode is in use
 	 */
 	public function add(array $f, string $actor): void {
@@ -224,14 +226,14 @@ class VaultServers {
 			}
 			$this->checkUnique($f, null);
 			$now = VaultStore::now();
-			$this->db->prepare('INSERT INTO servers ("key", name, source, host, port, sslmode, default_db, status, created_by, created_at, updated_at)
-				VALUES (:key, :name, \'ui\', :host, :port, :sslmode, :default_db, :status, :actor, :now, :now)')
+			$this->db->prepare('INSERT INTO servers ("key", name, source, host, port, sslmode, default_db, pgbouncer, status, created_by, created_at, updated_at)
+				VALUES (:key, :name, \'ui\', :host, :port, :sslmode, :default_db, :pgbouncer, :status, :actor, :now, :now)')
 				->execute(array(':key' => $f['key'], ':name' => $f['name'], ':host' => $f['host'], ':port' => $f['port'],
-					':sslmode' => $f['sslmode'], ':default_db' => $f['default_db'],
+					':sslmode' => $f['sslmode'], ':default_db' => $f['default_db'], ':pgbouncer' => $f['pgbouncer'],
 					':status' => $f['enabled'] ? 'active' : 'disabled', ':actor' => $actor, ':now' => $now));
 			$this->audit->log($actor, VaultAudit::SERVER_ADDED, array('server_id' => $f['key'], 'detail' => array(
 				'name' => $f['name'], 'host' => $f['host'], 'port' => $f['port'], 'sslmode' => $f['sslmode'],
-				'default_db' => $f['default_db'], 'enabled' => $f['enabled'])));
+				'default_db' => $f['default_db'], 'pgbouncer' => (bool)$f['pgbouncer'], 'enabled' => $f['enabled'])));
 		});
 	}
 
@@ -254,7 +256,7 @@ class VaultServers {
 				$this->checkUnique($f, $key);
 			}
 			$changed = array();
-			foreach (array('name', 'host', 'port', 'sslmode', 'default_db', 'status') as $col) {
+			foreach (array('name', 'host', 'port', 'sslmode', 'default_db', 'pgbouncer', 'status') as $col) {
 				$new = $col === 'status' ? $status : $f[$col];
 				if ((string)$row[$col] !== (string)$new) {
 					$changed[$col] = array('from' => $row[$col], 'to' => $new);
@@ -264,9 +266,9 @@ class VaultServers {
 				return;
 			}
 			$this->db->prepare('UPDATE servers SET name = :name, host = :host, port = :port, sslmode = :sslmode,
-				default_db = :default_db, status = :status, updated_at = :now WHERE "key" = :key')
+				default_db = :default_db, pgbouncer = :pgbouncer, status = :status, updated_at = :now WHERE "key" = :key')
 				->execute(array(':key' => $key, ':name' => $f['name'], ':host' => $f['host'], ':port' => $f['port'],
-					':sslmode' => $f['sslmode'], ':default_db' => $f['default_db'], ':status' => $status,
+					':sslmode' => $f['sslmode'], ':default_db' => $f['default_db'], ':pgbouncer' => $f['pgbouncer'], ':status' => $status,
 					':now' => VaultStore::now()));
 			$this->audit->log($actor, VaultAudit::SERVER_CHANGED, array('server_id' => $key, 'detail' => array('changed' => $changed)));
 		});
@@ -374,6 +376,7 @@ class VaultServers {
 			'port' => isset($f['port']) ? trim((string)$f['port']) : '',
 			'sslmode' => isset($f['sslmode']) ? (string)$f['sslmode'] : '',
 			'default_db' => isset($f['default_db']) ? trim((string)$f['default_db']) : '',
+			'pgbouncer' => empty($f['pgbouncer']) ? 0 : 1,
 			'enabled' => !empty($f['enabled']),
 		);
 		if (!preg_match('/^[^\p{Cc}]{1,100}$/Dsu', $out['name'])) {

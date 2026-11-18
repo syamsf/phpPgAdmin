@@ -9,7 +9,9 @@ CREATE TABLE servers (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'removed')),
   created_by TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  -- 1: connects through PgBouncer, which rejects startup options it can't track.
+  pgbouncer INTEGER NOT NULL DEFAULT 0 CHECK (pgbouncer IN (0, 1))
 );
 CREATE TABLE credentials (
   id TEXT PRIMARY KEY,

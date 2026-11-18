@@ -160,6 +160,36 @@ the database's `CONNECT` privilege allow, with any other client. For real
 isolation use `pg_hba.conf` rules, or `REVOKE CONNECT ON DATABASE other FROM
 PUBLIC` and grant it only to the roles that need it.
 
+### Servers behind PgBouncer
+
+phpPgAdmin asks for a few settings in the connection request itself
+(`DateStyle`, `bytea_output` and `statement_timeout` from
+`PPA_STATEMENT_TIMEOUT`). PgBouncer only accepts settings it can keep track of
+per client, so it refuses such a connection before it even checks the
+password, and the login fails with "This server is a PgBouncer and refused
+phpPgAdmin's connection settings."
+
+Mark those servers with `?pgbouncer=1`:
+
+```sh
+-e PPA_SERVERS="Main=db1.internal:5432, Pooled=pgbouncer.internal:6432?pgbouncer=1"
+```
+
+or tick "Behind PgBouncer" for a server added on "Manage servers". Such a
+server gets no settings in its connection request:
+
+- **No `statement_timeout`.** It isn't set after connecting either: with
+  transaction pooling a `SET` stays on the server connection, which PgBouncer
+  then hands to other clients. Use PgBouncer's `query_timeout` for a limit.
+- **bytea values show as hex** (`\x…`, PostgreSQL's default) instead of the
+  escape format, for the same reason.
+- `DateStyle` is set with a `SET` after connecting, when the server's default
+  isn't ISO. PgBouncer tracks that one per client, so it doesn't leak.
+
+Plain PostgreSQL servers are not affected. phpPgAdmin's other pages still
+assume a session of their own (for example the schema they work in), so
+point it at PgBouncer in session pooling mode where you can.
+
 By default you can't log in as `postgres` (or `root`, `pgsql`, `administrator`)
 or with an empty password. Create a normal login role for yourself, or set
 `PPA_EXTRA_LOGIN_SECURITY=false` if you really want the old behaviour.
@@ -168,7 +198,7 @@ or with an empty password. Create a normal login role for yourself, or set
 
 | Variable | Default | |
 |---|---|---|
-| `PPA_SERVERS` | `localhost` | Servers shown on the login page, separated by commas or spaces. Each one is `host`, `host:port` or `Name=host:port`, optionally followed by `/db1+db2` for a login per database (see above) or `?sslmode=require` to set the sslmode of just that server. IPv6 goes in brackets: `[::1]:5432`. Names can't contain spaces. |
+| `PPA_SERVERS` | `localhost` | Servers shown on the login page, separated by commas or spaces. Each one is `host`, `host:port` or `Name=host:port`, optionally followed by `/db1+db2` for a login per database (see above) or `?sslmode=require` to set the sslmode of just that server, or `?pgbouncer=1` for a server behind PgBouncer (both: `?sslmode=require&pgbouncer=1`, see [Servers behind PgBouncer](#servers-behind-pgbouncer)). IPv6 goes in brackets: `[::1]:5432`. Names can't contain spaces. |
 | `PPA_SSLMODE` | `prefer` | `disable`, `allow`, `prefer`, `require`, `verify-ca` or `verify-full`. Applies to every server that has no `?sslmode=` of its own. Use `verify-full` for anything that crosses a network you don't control. |
 | `PPA_SSLROOTCERT` | | Path (inside the container) of the CA certificate file used by `verify-ca` and `verify-full`. Mount it into the container. |
 | `PPA_DEFAULTDB` | `postgres` | Database to connect to before you pick one. |
@@ -189,7 +219,7 @@ or with an empty password. Create a normal login role for yourself, or set
 | `PPA_AJAX_REFRESH` | `3` | Seconds between refreshes on the locks and processes pages. `0` turns it off. |
 | `PPA_AUTOCOMPLETE` | `default on` | `default on`, `default off` or `disable`. |
 | `PPA_PLUGINS` | | Comma-separated, e.g. `Report`. |
-| `PPA_STATEMENT_TIMEOUT` | | Cancel statements that run longer than this, e.g. `30s` or `5min` (PostgreSQL's `statement_timeout`, also applies to the SQL editor). Unset means no limit. |
+| `PPA_STATEMENT_TIMEOUT` | | Cancel statements that run longer than this, e.g. `30s` or `5min` (PostgreSQL's `statement_timeout`, also applies to the SQL editor). Unset means no limit. Not applied to servers behind PgBouncer. |
 | `PGCONNECT_TIMEOUT` | `10` | Seconds to wait for a server to accept a connection. |
 | `PHP_SESSION_COOKIE_SECURE` | `0` | Set to `1` when the site is served over HTTPS. |
 | `AUTH_MODE` | | Required. `sso` (a sign-in proxy says who you are, in headers) or `local` (the app keeps its own users). See [Signing in](#signing-in). |
@@ -348,7 +378,8 @@ role per person over shared roles.
 
 Besides the servers in `PPA_SERVERS`, admins can add servers on the "Manage
 servers" tab (`servers_admin.php`): key, display name, host, port, SSL mode
-(`disable`, `prefer`, `require`, `verify-full`) and default database. A server
+(`disable`, `prefer`, `require`, `verify-full`), default database and whether
+it is behind PgBouncer (see [Servers behind PgBouncer](#servers-behind-pgbouncer)). A server
 added there shows in everyone's server tree on their next request.
 
 - **Env servers are read-only.** They are listed with a lock, with their login
