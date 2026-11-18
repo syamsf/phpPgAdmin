@@ -1311,6 +1311,17 @@ p.sql-rows-capped {
 input.sql-expand:checked ~ .sql-results .sql-clipped { display: none; }
 input.sql-expand:checked ~ .sql-results .sql-full { display: block; }
 input.sql-expand:checked ~ .sql-results td { white-space: pre-wrap; }
+/* sql.php asks before a DELETE without WHERE or a TRUNCATE (theme-neutral, like sql-rows-capped) */
+.sql-unsafe {
+	padding: 0.35em 0.8em;
+	margin: 0.5em 0;
+	border-left: 4px solid rgb(220, 40, 40);
+	background: rgba(220, 40, 40, 0.10);
+	max-width: 60em;
+}
+.sql-unsafe ul { margin: 0.3em 0; padding-left: 1.4em; }
+.sql-unsafe code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sql-unsafe label { display: inline-flex; align-items: center; gap: 0.4em; }
 
 /* ---- end SQL editor ---- */
 

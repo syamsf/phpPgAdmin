@@ -52,6 +52,7 @@ python3 crawl.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=
 python3 dblogin.py "http://127.0.0.1:$PPA_PORT" scoped scoped || status=1
 python3 security.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
 python3 schemaowner.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
+python3 sqlguard.py "http://127.0.0.1:$PPA_PORT" "db:5432:allow" ppa ppa || status=1
 python3 vault.py "http://127.0.0.1:$PPA_PORT" "http://127.0.0.1:$PPA_LOCAL_PORT" "http://127.0.0.1:$PPA_STRICT_PORT" || status=1
 
 # Headless Chrome checks of the JavaScript side (needs Node and Chrome; run

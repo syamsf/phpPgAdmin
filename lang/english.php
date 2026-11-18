@@ -450,6 +450,11 @@
 	$lang['strdatabasedroppedbad'] = 'Database drop failed.';
 	$lang['strentersql'] = 'Enter the SQL to execute below:';
 	$lang['strsqlexecuted'] = 'SQL executed.';
+	$lang['strsqlunsafetitle'] = 'Run this query?';
+	$lang['strsqlunsafe'] = 'Not run yet: this would remove every row of a table.';
+	$lang['strsqlunsafehint'] = 'A DELETE without a WHERE deletes all rows, and TRUNCATE empties the table. Add a WHERE below to delete only some rows, or run it as it is.';
+	$lang['strsqlrunanyway'] = 'Run anyway';
+	$lang['strsqlunsafenoask'] = 'Don\'t ask again in this browser tab';
 	$lang['strhintschema'] = 'schema';
 	$lang['strhintinschema'] = 'in %s';
 	$lang['strsqlfailed'] = 'SQL failed.';

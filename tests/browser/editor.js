@@ -284,6 +284,40 @@ async function run(page, key = 'Control') {
 	await Promise.all([page.waitForNavigation(), page.goto(editLinks[0][0])]);
 	ok(await page.$('.CodeMirror') !== null && /SELECT|select/.test(await page.evaluate(() => document.querySelector('.CodeMirror').CodeMirror.getValue())), 'history page: open-in-editor shows the query in the editor');
 
+	// A DELETE without WHERE or a TRUNCATE is asked first; "don't ask again"
+	// lasts for this browser tab only.
+	const sqlTab = BASE + `database.php?subject=database&server=${Q}&database=ppa_test&action=sql`;
+	const bodyText = (p) => p.evaluate(() => document.body.innerText);
+	await page.goto(sqlTab, { waitUntil: 'load' });
+	await page.$eval('#paginate', (e) => { e.checked = false; });
+	await cmSet(page, 'DROP TABLE IF EXISTS public.ppa_tabguard; CREATE TABLE public.ppa_tabguard AS SELECT generate_series(1, 3) AS id');
+	await run(page);
+	await cmSet(page, 'DELETE FROM public.ppa_tabguard');
+	await run(page);
+	ok(await page.$('.sql-unsafe') !== null && /Run this query\?/.test(await bodyText(page)), 'DELETE without WHERE: asked first');
+	ok((await cmValue(page)) === 'DELETE FROM public.ppa_tabguard', 'DELETE without WHERE: the editor keeps the query');
+	await shot(page, '14-unsafe-asked');
+	await page.click('input[data-ppa-unsafe-remember]');
+	await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), page.click('input.sql-unsafe-run')]);
+	let t = await bodyText(page);
+	ok(await page.$('.sql-unsafe') === null && /3 row\(s\) affected/.test(t), 'Run anyway ran it: ' + t.slice(0, 200).replace(/\s+/g, ' '));
+	await cmSet(page, 'TRUNCATE public.ppa_tabguard');
+	await run(page);
+	ok(await page.$('.sql-unsafe') === null && /SQL executed/.test(await bodyText(page)), 'same tab: not asked again');
+	const tab2 = await browser.newPage();
+	await tab2.setExtraHTTPHeaders({'Remote-User': 'ppa-test', 'Remote-Groups': 'role-admin'});
+	await tab2.evaluateOnNewDocument(() => {
+		try { Object.defineProperty(window, 'opener', { get: () => window, configurable: true }); } catch (e) { /* */ }
+	});
+	await tab2.goto(sqlTab, { waitUntil: 'load' });
+	await tab2.$eval('#paginate', (e) => { e.checked = false; });
+	await cmSet(tab2, 'TRUNCATE public.ppa_tabguard');
+	await run(tab2);
+	ok(await tab2.$('.sql-unsafe') !== null, 'a new tab asks again');
+	await cmSet(tab2, 'DROP TABLE public.ppa_tabguard');
+	await run(tab2);
+	await tab2.close();
+
 	// Dark theme
 	await page.goto(BASE + `database.php?subject=database&server=${Q}&database=ppa_test&action=sql&theme=dark`, { waitUntil: 'load' });
 	ok(await page.$('.CodeMirror.cm-s-ppa-dark') !== null, 'dark: editor uses the dark syntax theme');
