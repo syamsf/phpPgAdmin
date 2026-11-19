@@ -129,27 +129,34 @@ try {
 	check((await dbField()).value === 'ppa_test', 'the select can be changed');
 	await page.screenshot({ path: OUT + 'shared-form-database.png' });
 
-	// Sharing panel (board 4): User is the default; the name field's label
-	// and suggestions follow the User / Group choice.
+	// Sharing panel (board 4): User is the default; the User / Group choice
+	// shows and enables its own name dropdown, and hides and disables the other.
 	await page.goto(BASE + 'vault_admin.php', { waitUntil: 'networkidle0' });
 	const shared = await page.$eval('td.vault-label a', (a) => a.href).catch(() => null);
 	check(shared !== null, 'there is a shared login to open');
 	if (shared) {
 		await page.goto(shared, { waitUntil: 'networkidle0' });
-		const principal = () => page.evaluate(() => ({
-			type: document.querySelector('input[name=type]:checked').value,
-			label: document.querySelector('label[for="vault-principal"]').textContent,
-			list: document.getElementById('vault-principal').getAttribute('list'),
-		}));
+		// The one name dropdown that is shown and enabled, with its label.
+		const principal = () => page.evaluate(() => {
+			const live = ['user', 'group'].filter((t) => {
+				const s = document.getElementById('vault-principal-' + t);
+				return s && !s.disabled && !s.parentNode.hidden;
+			});
+			return {
+				type: document.querySelector('input[name=type]:checked').value,
+				live: live,
+				label: live.length === 1 ? document.querySelector('label[for="vault-principal-' + live[0] + '"]').textContent : null,
+			};
+		});
 		let p = await principal();
-		check(p.type === 'user' && p.label === 'User name' && p.list === 'vault-principals-user',
-			'the share form starts on User with user suggestions: ' + JSON.stringify(p));
+		check(p.type === 'user' && p.live.join() === 'user' && p.label === 'User name',
+			'the share form starts on User with the users dropdown: ' + JSON.stringify(p));
 		await page.click('input[name=type][value=group]');
 		p = await principal();
-		check(p.label === 'Group name' && p.list === 'vault-principals-group', 'Group switches to group suggestions: ' + JSON.stringify(p));
+		check(p.live.join() === 'group' && p.label === 'Group name', 'Group switches to the groups dropdown: ' + JSON.stringify(p));
 		await page.click('input[name=type][value=user]');
 		p = await principal();
-		check(p.label === 'User name' && p.list === 'vault-principals-user', 'User switches back: ' + JSON.stringify(p));
+		check(p.live.join() === 'user' && p.label === 'User name', 'User switches back: ' + JSON.stringify(p));
 	}
 
 	await page.goto(BASE + 'servers_admin.php', { waitUntil: 'networkidle0' });

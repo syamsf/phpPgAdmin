@@ -916,12 +916,12 @@ def test_share_to_group_shows_in_dropdown():
     check("Has access (1)" in text and "group dba" in text, "dba isn't listed: %s" % text[-800:])
     check("added by boss" in text and "no expiry" in text, "no share meta")
     check(re.search(r"%s ppa_other vault_rot read-only 1 group OK" % re.escape(label), text), "summary row: %s" % text[:1200])
-    check('<datalist id="vault-principals-user">' in page and '<datalist id="vault-principals-group">' in page,
-          "no name suggestions")
-    m = re.search(r'<datalist id="vault-principals-group">(.*?)</datalist>', page, re.S)
-    check(m and '<option value="dba"' in m.group(1), "dba isn't suggested as a group")
-    m = re.search(r'<datalist id="vault-principals-user">(.*?)</datalist>', page, re.S)
-    check(m and '<option value="dba"' not in m.group(1), "a group is suggested as a user")
+    m = re.search(r'<select id="vault-principal-group"[^>]*>(.*?)</select>', page, re.S)
+    check(m, "no group dropdown")
+    check('<option value="dba"' in m.group(1), "dba isn't offered as a group")
+    m = re.search(r'<select id="vault-principal-user"[^>]*>(.*?)</select>', page, re.S)
+    check(m, "no user dropdown")
+    check('<option value="dba"' not in m.group(1), "a group is offered as a user")
 
     alice = who(uniq("alice"), "dba")
     opts = [o for o in saved_options(login_page(alice)) if o["label"] == label]
@@ -1187,13 +1187,25 @@ def test_share_form_defaults_to_user():
     page = admin_get(boss(), id=cid)
     radios = re.findall(r'<input type="radio" name="type" value="(\w+)"[^>]*?( checked="checked")?\s*/>', page)
     check(radios == [("user", " checked=\"checked\""), ("group", "")], "share radios: %r" % radios)
-    check(re.search(r'<label for="vault-principal">User name</label>', page), "the name field isn't labelled for a user")
-    m = re.search(r'<input type="text" id="vault-principal"[^>]*>', page)
-    check(m and 'list="vault-principals-user"' in m.group(0), "the name field doesn't suggest users: %s" % (m.group(0) if m else ""))
+    check(re.search(r'<label for="vault-principal-user">User name</label>', page), "the user dropdown isn't labelled")
+    check(re.search(r'<label for="vault-principal-group">Group name</label>', page), "the group dropdown isn't labelled")
+
+    def principal_fields(page):
+        """{type: (shown, enabled)} for the user and group name dropdowns."""
+        out = {}
+        for t in ("user", "group"):
+            m = re.search(r'<div class="vault-field"([^>]*)><label for="vault-principal-%s">.*?'
+                          r'<select id="vault-principal-%s"([^>]*)>' % (t, t), page, re.S)
+            check(m, "no %s dropdown" % t)
+            out[t] = ("hidden" not in m.group(1), "disabled" not in m.group(2))
+        return out
+
+    fields = principal_fields(page)
+    check(fields == {"user": (True, True), "group": (False, False)}, "the form doesn't default to the user dropdown: %r" % fields)
     # After a failed group share, the form keeps the group choice
     page = share_via_page(boss(), cid, "group", "")
-    m = re.search(r'<input type="text" id="vault-principal"[^>]*>', page)
-    check(m and 'list="vault-principals-group"' in m.group(0), "a failed group share lost the choice")
+    fields = principal_fields(page)
+    check(fields == {"user": (False, False), "group": (True, True)}, "a failed group share lost the choice: %r" % fields)
 
 
 @test
@@ -1205,7 +1217,7 @@ def test_database_field_follows_server():
     check(m, "no Database select for a per-database server")
     check(re.findall(r'<option value="([^"]*)"', m.group(1)) == ["ppa_other", "ppa_test"], "options: %s" % m.group(1))
     check('<option value="ppa_test" selected="selected">' in m.group(1), "the posted database isn't selected")
-    check("<datalist" not in re.sub(r'<datalist id="vault-principals-(user|group)">', "", page), "a browser suggestion list is left")
+    check("<datalist" not in page, "a browser suggestion list is left")
     # Any other server: a text box with what was typed
     page = post_form(admin, "test", label=uniq("dbfield"), server_id="test", database="postgres", password="wrong")
     m = re.search(r'<input type="text" id="vault-database" name="database"[^>]*>', page)
