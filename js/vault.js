@@ -276,15 +276,19 @@
 		}, 0);
 	});
 
-	// Shared logins panel (vault_admin.php): the name field's label follows
-	// the User / Group choice, and so do its suggestions (users or groups).
+	// Shared logins panel (vault_admin.php): the User / Group choice shows
+	// its name field (the users dropdown or the group box) and hides the
+	// other, disabled so that only the chosen one is submitted.
 	document.addEventListener('change', function (e) {
 		var radio = e.target;
 		if (!radio.matches || !radio.matches('input[data-vault-share-type]') || !radio.form) return;
-		var label = radio.form.querySelector('label[for="vault-principal"]');
-		if (label) label.textContent = radio.getAttribute('data-label');
-		var input = radio.form.querySelector('#vault-principal');
-		if (input && radio.getAttribute('data-list')) input.setAttribute('list', radio.getAttribute('data-list'));
+		var radios = radio.form.querySelectorAll('input[data-vault-share-type]');
+		for (var i = 0; i < radios.length; i++) {
+			var field = radio.form.querySelector('#' + radios[i].getAttribute('data-field'));
+			if (!field) continue;
+			field.disabled = !radios[i].checked;
+			field.parentNode.hidden = !radios[i].checked;
+		}
 	});
 
 	// Shared login form (vault_admin.php): the Database field follows the

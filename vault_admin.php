@@ -255,29 +255,38 @@
 		echo "<form action=\"vault_admin.php\" method=\"post\" class=\"vault-panel-part vault-share-form\" autocomplete=\"off\">\n";
 		echo "<fieldset class=\"vault-access\"><legend>", htmlspecialchars($lang['strvaultsharewith']), "</legend>\n";
 		foreach (array('user' => array('strvaultuser', 'strvaultprincipaluser'), 'group' => array('strvaultgroup', 'strvaultprincipalgroup')) as $type => $keys) {
-			echo "<label><input type=\"radio\" name=\"type\" value=\"{$type}\" data-vault-share-type=\"\" data-label=\"",
-				htmlspecialchars($lang[$keys[1]]), "\" data-list=\"vault-principals-{$type}\"", ($isUser === ($type === 'user')) ? ' checked="checked"' : '', " /> ",
+			echo "<label><input type=\"radio\" name=\"type\" value=\"{$type}\" data-vault-share-type=\"\" data-field=\"vault-principal-{$type}\"",
+				($isUser === ($type === 'user')) ? ' checked="checked"' : '', " /> ",
 				htmlspecialchars($lang[$keys[0]]), "</label>\n";
 		}
 		echo "</fieldset>\n";
-		echo "<div class=\"vault-field\"><label for=\"vault-principal\">",
-			htmlspecialchars($lang[$isUser ? 'strvaultprincipaluser' : 'strvaultprincipalgroup']), "</label>",
-			"<input type=\"text\" id=\"vault-principal\" name=\"principal\" list=\"vault-principals-", $isUser ? 'user' : 'group',
-			"\" maxlength=\"128\" required=\"required\" placeholder=\"",
-			htmlspecialchars($lang['strvaultprincipalplaceholder']), "\" value=\"", htmlspecialchars($vault_share_form['principal']), "\" /></div>\n";
-		// Name suggestions, one list per choice: the app's (enabled) users
-		// with their display names, and the groups known to the vault.
-		echo "<datalist id=\"vault-principals-user\">\n";
+		// One name dropdown per choice, only the chosen one shown and
+		// submitted: the app's (enabled) users, or the groups known to the vault.
+		$disabled = ' disabled="disabled"';
+		$hidden = ' hidden="hidden"';
+		echo "<div class=\"vault-field\"", $isUser ? '' : $hidden, "><label for=\"vault-principal-user\">",
+			htmlspecialchars($lang['strvaultprincipaluser']), "</label>",
+			"<select id=\"vault-principal-user\" name=\"principal\" required=\"required\"", $isUser ? '' : $disabled, ">\n",
+			"<option value=\"\">", htmlspecialchars($lang['strvaultchooseuser']), "</option>\n";
 		foreach ($users as $user => $name) {
-			echo "<option value=\"", htmlspecialchars((string) $user), "\" label=\"",
-				htmlspecialchars((string) $name !== '' ? (string) $name : $lang['strvaultshareuser']), "\"></option>\n";
+			$user = (string) $user;
+			$name = (string) $name;
+			echo "<option value=\"", htmlspecialchars($user), "\"",
+				($isUser && $vault_share_form['principal'] === $user) ? ' selected="selected"' : '', ">",
+				htmlspecialchars($name !== '' && $name !== $user ? "{$user} ({$name})" : $user), "</option>\n";
 		}
-		echo "</datalist>\n";
-		echo "<datalist id=\"vault-principals-group\">\n";
+		echo "</select></div>\n";
+		echo "<div class=\"vault-field\"", $isUser ? $hidden : '', "><label for=\"vault-principal-group\">",
+			htmlspecialchars($lang['strvaultprincipalgroup']), "</label>",
+			"<select id=\"vault-principal-group\" name=\"principal\" required=\"required\"", $isUser ? $disabled : '', ">\n",
+			"<option value=\"\">", htmlspecialchars($lang['strvaultchoosegroup']), "</option>\n";
 		foreach (array_keys($groups) as $group) {
-			echo "<option value=\"", htmlspecialchars((string) $group), "\" label=\"", htmlspecialchars($lang['strvaultsharegroup']), "\"></option>\n";
+			$group = (string) $group;
+			echo "<option value=\"", htmlspecialchars($group), "\"",
+				(!$isUser && $vault_share_form['principal'] === $group) ? ' selected="selected"' : '', ">",
+				htmlspecialchars($group), "</option>\n";
 		}
-		echo "</datalist>\n";
+		echo "</select></div>\n";
 		echo "<div class=\"vault-field\"><label for=\"vault-expires\">", htmlspecialchars($lang['strvaultexpiresoptional']), "</label>",
 			"<input type=\"date\" id=\"vault-expires\" name=\"expires\" min=\"", gmdate('Y-m-d'), "\" value=\"",
 			htmlspecialchars($vault_share_form['expires']), "\" /></div>\n";

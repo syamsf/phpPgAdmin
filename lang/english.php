@@ -1161,7 +1161,8 @@
 	$lang['strvaultuser'] = 'User';
 	$lang['strvaultprincipalgroup'] = 'Group name';
 	$lang['strvaultprincipaluser'] = 'User name';
-	$lang['strvaultprincipalplaceholder'] = 'Start typing, e.g. data-eng';
+	$lang['strvaultchooseuser'] = 'Choose a user…';
+	$lang['strvaultchoosegroup'] = 'Choose a group…';
 	$lang['strvaultexpiresoptional'] = 'Expires (optional)';
 	$lang['strvaultadd'] = 'Add';
 	$lang['strvaulthasaccess'] = 'Has access (%d)';

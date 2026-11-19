@@ -1418,6 +1418,9 @@ td.process-query {
 	gap: 6px;
 	min-width: 0;
 }
+.vault-field[hidden] {
+	display: none;
+}
 .vault-field > label {
 	font-weight: 700;
 }
@@ -1853,7 +1856,8 @@ a.vault-button:focus-visible {
 	border-bottom: 0;
 }
 .vault-share-form input[type="text"],
-.vault-share-form input[type="date"] {
+.vault-share-form input[type="date"],
+.vault-share-form select {
 	box-sizing: border-box;
 	width: 100%;
 	min-height: 36px;
