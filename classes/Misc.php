@@ -596,6 +596,48 @@
 		}
 
 		/**
+		 * The pg_dump / pg_dumpall command line with the export limits
+		 * applied. pg_dump holds a lock on every table it dumps until it
+		 * ends, and a statement that needs a stronger lock (LOCK TABLE, ALTER)
+		 * queues behind it, with every later query on that table behind
+		 * that: a long dump of a live database can stall its application.
+		 * - pg_dump_lock_wait_timeout ("30s", "2min"): give up instead of
+		 *   waiting for those locks
+		 * - pg_dump_max_minutes: stop the dump after that long (see
+		 *   pgDumpTimedOut())
+		 * @param $cmd string the shell command, options included; the database
+		 *        comes from PGDATABASE, so options can go at its end
+		 * @param $conf array the config
+		 */
+		static function pgDumpCommand($cmd, array $conf) {
+			$wait = preg_replace('/\s+/', '', (string) ($conf['pg_dump_lock_wait_timeout'] ?? ''));
+			if ($wait !== '') {
+				if (preg_match('/^[0-9]+(ms|s|min|h|d)?$/', $wait))
+					$cmd .= " --lock-wait-timeout={$wait}";
+				else
+					trigger_error("Ignoring invalid \$conf['pg_dump_lock_wait_timeout']", E_USER_WARNING);
+			}
+			$minutes = self::pgDumpMaxMinutes($conf);
+			if ($minutes > 0)
+				$cmd = 'timeout --signal=TERM ' . ($minutes * 60) . ' ' . $cmd;
+			return $cmd;
+		}
+
+		/** $conf['pg_dump_max_minutes'] as a whole number, 0 for no limit. */
+		static function pgDumpMaxMinutes(array $conf) {
+			$minutes = $conf['pg_dump_max_minutes'] ?? 0;
+			return (is_int($minutes) || ctype_digit((string) $minutes)) && (int) $minutes > 0 ? (int) $minutes : 0;
+		}
+
+		/**
+		 * Whether pgDumpCommand()'s time limit stopped the dump, from the
+		 * command's exit status (coreutils timeout exits 124 then).
+		 */
+		static function pgDumpTimedOut($status, array $conf) {
+			return $status === 124 && self::pgDumpMaxMinutes($conf) > 0;
+		}
+
+		/**
 		 * Creates a database accessor
 		 */
 		function getDatabaseAccessor($database, $server_id = null) {

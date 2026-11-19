@@ -26,6 +26,9 @@ services:
       PPA_SERVERS: "Test=db:5432 Scoped=db:5432/ppa_other+ppa_test Tls=db:5432?sslmode=require"
       PPA_SSLMODE: allow   # keeps the server ids (db:5432:allow) the tests use
       PPA_SHOW_ADVANCED: "true"
+      # The crawl's pg_dump exports then run through both limits.
+      PPA_PG_DUMP_LOCK_WAIT_TIMEOUT: "30s"
+      PPA_PG_DUMP_MAX_MINUTES: "5"
       # The test clients send Remote-User / Remote-Groups themselves, so
       # every address counts as the proxy here. Never do this for real.
       AUTH_MODE: sso

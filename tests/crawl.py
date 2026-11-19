@@ -124,6 +124,15 @@ def main(base, server, user, password):
                                 sd_format="sql", output="show", action="export")),
         ("dataexport.php", dict(db, subject="table", table="customer", schema="shop", what="dataonly",
                                 d_format="csv", output="show", action="export")),
+        # A table or query the export can't read (here: no such table; in real
+        # life usually "permission denied") gives a page with the SQL error,
+        # not an HTTP 500 that the browser shows as a broken download.
+        ("dataexport.php", dict(db, subject="table", table="no_such_table", schema="shop", what="dataonly",
+                                d_format="csv", output="download", action="export"),
+         ["SQL error:", "no_such_table", "Export failed."]),
+        ("dataexport.php", dict(db, query="SELECT * FROM shop.no_such_table", what="dataonly",
+                                d_format="csv", output="download", action="export"),
+         ["SQL error:", "no_such_table", "Export failed."]),
         ("dbexport.php", dict(db, subject="database", what="structureanddata", sd_format="sql",
                               output="show", action="export")),
         ("dbexport.php", dict(db, subject="table", table="orders", schema="shop", what="structureonly",

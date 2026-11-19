@@ -181,6 +181,16 @@
 	// (PostgreSQL's statement_timeout). Empty means no limit.
 	$conf['statement_timeout'] = '';
 
+	// Exports through pg_dump/pg_dumpall (a server's pg_dump_path, set it to
+	// '' to turn them off for that server). pg_dump holds a lock on every table
+	// it dumps until it ends, which can hold up an application on a live
+	// database. Give up waiting for those locks after this, e.g. '30s'
+	// (pg_dump's --lock-wait-timeout); empty means wait.
+	$conf['pg_dump_lock_wait_timeout'] = '';
+	// Stop a dump after this many minutes (0: no limit). The output then ends
+	// with a comment saying the dump is incomplete.
+	$conf['pg_dump_max_minutes'] = 0;
+
 	// Configuration for ajax scripts
 	// Time in seconds. If set to 0, refreshing data using ajax will be disabled (locks and activity pages)
 	$conf['ajax_refresh'] = 3;

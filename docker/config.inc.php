@@ -103,14 +103,18 @@ if (!function_exists('ppa_env')) {
 	}
 }
 
+// PPA_PG_DUMP=false: no pg_dump/pg_dumpall for any server. The Export tabs of
+// servers, databases and schemas go away; tables export with the built-in code.
+$ppa_dump_paths = ppa_env_bool('PPA_PG_DUMP', true)
+	? array('pg_dump_path' => '/usr/bin/pg_dump', 'pg_dumpall_path' => '/usr/bin/pg_dumpall')
+	: array('pg_dump_path' => '', 'pg_dumpall_path' => '');
+
 foreach (ppa_parse_servers(ppa_env('PPA_SERVERS', 'localhost')) as $i => $server) {
 	$conf['servers'][$i] = $server + array(
 		'sslmode' => ppa_env('PPA_SSLMODE', 'prefer'),
 		'sslrootcert' => ppa_env('PPA_SSLROOTCERT', ''),
 		'defaultdb' => ppa_env('PPA_DEFAULTDB', 'postgres'),
-		'pg_dump_path' => '/usr/bin/pg_dump',
-		'pg_dumpall_path' => '/usr/bin/pg_dumpall',
-	);
+	) + $ppa_dump_paths;
 }
 
 $conf['default_lang'] = ppa_env('PPA_DEFAULT_LANG', 'auto');
@@ -134,6 +138,10 @@ $conf['help_base'] = 'https://www.postgresql.org/docs/%s/';
 $conf['ajax_refresh'] = (int) ppa_env('PPA_AJAX_REFRESH', 3);
 // e.g. "30s" or "5min"; unset means no limit.
 $conf['statement_timeout'] = ppa_env('PPA_STATEMENT_TIMEOUT', '');
+// pg_dump exports: give up waiting for table locks after this ("30s"), and
+// stop a dump that runs longer than this many minutes. Unset: no limit.
+$conf['pg_dump_lock_wait_timeout'] = ppa_env('PPA_PG_DUMP_LOCK_WAIT_TIMEOUT', '');
+$conf['pg_dump_max_minutes'] = (int) ppa_env('PPA_PG_DUMP_MAX_MINUTES', 0);
 $conf['plugins'] = preg_split('/[\s,]+/', ppa_env('PPA_PLUGINS', ''), -1, PREG_SPLIT_NO_EMPTY);
 
 // Sign-in and saved logins. AUTH_MODE, AUTH_ADMIN_GROUP and a vault key have
@@ -151,9 +159,7 @@ $conf['vault'] = array(
 	'signout_url' => ppa_env('AUTH_SIGNOUT_URL', ''),
 	'idle_minutes' => ppa_env('AUTH_IDLE_MINUTES', '30'),
 	// Settings for servers added in the UI, which have no env of their own.
-	'ui_defaults' => array(
-		'pg_dump_path' => '/usr/bin/pg_dump',
-		'pg_dumpall_path' => '/usr/bin/pg_dumpall',
+	'ui_defaults' => $ppa_dump_paths + array(
 		'sslrootcert' => ppa_env('PPA_SSLROOTCERT', ''),
 	),
 );

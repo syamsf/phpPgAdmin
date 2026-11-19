@@ -63,6 +63,7 @@
 	$lang['strexportcopy'] = 'COPY (PostgreSQL only, fastest to load back)';
 	$lang['strexportsql'] = 'SQL INSERT statements';
 	$lang['strexportdrop'] = 'Start with DROP statements (replaces what exists when loaded)';
+	$lang['strexportfailed'] = 'Export failed.';
 	$lang['strbuiltinroles'] = 'Built-in roles (%d)';
 	$lang['strnoownroles'] = 'No other roles yet.';
 	$lang['strhelpdocs'] = 'PostgreSQL documentation (opens in a new tab)';

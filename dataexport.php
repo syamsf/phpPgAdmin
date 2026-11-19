@@ -70,6 +70,11 @@
 				break;
 		}
 
+		// Hold the output, and with it the download headers, until the export
+		// query has run. If it fails there is nothing to download, and the
+		// error is shown as a page (see below) instead of a broken download.
+		ob_start();
+
 		// Make it do a download, if necessary
 		if ($_REQUEST['output'] == 'download') {
 			// Set headers.  MSIE is totally broken for SSL downloading, so
@@ -123,6 +128,27 @@
 				$rs = $data->dumpRelation($_REQUEST['table'] ?? '', $oids);
 			else
 				$rs = $data->dumpQuery($_REQUEST['query'] ?? '');
+
+			if (!is_object($rs)) {
+				// Usually "permission denied for table". Error_Handler held
+				// the SQL error back; the page below prints it.
+				$serverInfo = $misc->getServerInfo();
+				error_log('phpPgAdmin export failed for ' . ($serverInfo['username'] ?? '?') . ': '
+					. preg_replace('/\s+/', ' ', trim($data->dumpError)));
+				$data->rollbackTransaction();
+				ob_end_clean();
+				header_remove('Content-Disposition');
+				unset($_no_output);
+				$misc->printHeader($lang['strexport']);
+				$misc->printBody();
+				$misc->printTrail($_REQUEST['subject'] ?? 'database');
+				$misc->printTitle($lang['strexport']);
+				$misc->printMsg($lang['strexportfailed']);
+				$misc->printFooter();
+				exit;
+			}
+			// The query runs: from here on the rows stream to the browser.
+			ob_end_flush();
 
 			if ($format == 'copy') {
 				$data->fieldClean($_REQUEST['table']);

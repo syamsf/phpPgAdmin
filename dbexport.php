@@ -146,8 +146,43 @@
 			putenv('PGDATABASE=' . $_curr_db);
 		}
 
+		// Lock wait and time limits (PPA_PG_DUMP_LOCK_WAIT_TIMEOUT,
+		// PPA_PG_DUMP_MAX_MINUTES), see Misc::pgDumpCommand().
+		$cmd = Misc::pgDumpCommand($cmd, $conf);
+
+		// Who dumps what: a whole-database dump holds locks on every table
+		// for as long as it runs.
+		$what = $dumpall ? 'all databases' : ('database ' . $_curr_db
+			. ($f_schema !== '' ? ", schema {$f_schema}" : '')
+			. ($f_object !== '' ? ", {$_REQUEST['subject']} {$f_object}" : ''));
+		$appUser = (isset($vault) && $vault->identity) ? $vault->identity->username : '?';
+		$who = $appUser . ' as ' . ($server_info['username'] ?? '?')
+			. ' on ' . ($server_info['desc'] ?? $server_info['host'] ?? '?');
+		$started = microtime(true);
+		error_log("phpPgAdmin pg_dump started by {$who}: {$what} ({$_REQUEST['what']})");
+
 		// Execute command and return the output to the screen
-		passthru($cmd);
+		$status = null;
+		passthru($cmd, $status);
+
+		$seconds = round(microtime(true) - $started);
+		if (Misc::pgDumpTimedOut($status, $conf)) {
+			$minutes = Misc::pgDumpMaxMinutes($conf);
+			error_log("phpPgAdmin pg_dump stopped after {$minutes} min (PPA_PG_DUMP_MAX_MINUTES) for {$who}: {$what}");
+			// The SQL is cut off mid-way: say so where it ends. (A gzipped
+			// dump is simply truncated and won't decompress.)
+			if ($_REQUEST['output'] != 'gzipped')
+				echo "\n-- phpPgAdmin: pg_dump was stopped after {$minutes} minutes (PPA_PG_DUMP_MAX_MINUTES).\n"
+					. "-- THIS DUMP IS INCOMPLETE. Export less (one schema or table), or ask an administrator.\n";
+		}
+		else {
+			error_log("phpPgAdmin pg_dump ended for {$who}: {$what}, exit status {$status} after {$seconds}s");
+			// pg_dump's own message goes to the server log only; without this
+			// a failed dump is just an empty or short file.
+			if ($status !== 0 && $_REQUEST['output'] != 'gzipped')
+				echo "\n-- phpPgAdmin: pg_dump failed (exit status {$status}), e.g. permission denied on a table,\n"
+					. "-- or a table it could not lock in time. THIS DUMP IS INCOMPLETE. Ask an administrator for the server log.\n";
+		}
 	}
 
 ?>

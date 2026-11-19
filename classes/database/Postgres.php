@@ -2534,12 +2534,15 @@ class Postgres extends ADODB_base {
 		return $this->endTransaction();
 	}
 
+	/** The server's message when dumpRelation() or dumpQuery() failed. */
+	public $dumpError = '';
+
 	/**
 	 * Returns a recordset of all columns in a relation.  Used for data export.
 	 * The rows come from a server-side cursor, so call beginDump() first.
 	 * @param $relation The name of a relation
 	 * @return A recordset (DumpCursor) on success
-	 * @return An error number on failure
+	 * @return An error number on failure (the message is in $dumpError)
 	 */
 	function dumpRelation($relation, $oids) {
 		$this->fieldClean($relation);
@@ -2553,6 +2556,8 @@ class Postgres extends ADODB_base {
 		$own = $this->beginDumpCursorTransaction();
 		$status = $this->execute("DECLARE ppa_dump NO SCROLL CURSOR FOR SELECT {$oid_str}* FROM \"{$relation}\"");
 		if ($status != 0) {
+			// Before the ROLLBACK, which clears it.
+			$this->dumpError = $this->conn->ErrorMsg();
 			if ($own) $this->conn->Execute('ROLLBACK');
 			return $status;
 		}
@@ -2577,7 +2582,7 @@ class Postgres extends ADODB_base {
 	 * A single SELECT (or VALUES, TABLE, WITH) is read through a server-side
 	 * cursor, so call beginDump() first. Anything else is run as it is.
 	 * @param $query The query
-	 * @return A recordset on success, false on failure
+	 * @return A recordset on success, false on failure (the message is in $dumpError)
 	 */
 	function dumpQuery($query) {
 		$single = rtrim($query, " \t\r\n;");
@@ -2602,7 +2607,9 @@ class Postgres extends ADODB_base {
 			$this->conn->Execute($own ? 'ROLLBACK' : 'ROLLBACK TO SAVEPOINT ppa_dump');
 		}
 
-		return $this->conn->Execute($query);
+		$rs = $this->conn->Execute($query);
+		if (!$rs) $this->dumpError = $this->conn->ErrorMsg();
+		return $rs;
 	}
 
 	/**

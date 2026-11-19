@@ -29,6 +29,13 @@ Features:
   counting
 * New settings: statement_timeout (PPA_STATEMENT_TIMEOUT), max_result_rows
   (PPA_MAX_RESULT_ROWS, default 1000); PGCONNECT_TIMEOUT defaults to 10s
+* pg_dump exports can be limited or turned off: PPA_PG_DUMP=false (no
+  pg_dump/pg_dumpall for any server), PPA_PG_DUMP_LOCK_WAIT_TIMEOUT and
+  PPA_PG_DUMP_MAX_MINUTES ($conf['pg_dump_lock_wait_timeout'],
+  $conf['pg_dump_max_minutes']). A whole-database dump of a live database holds
+  a lock on every table while it runs, and stalled an application that locks
+  one of them. Every pg_dump export is logged: app user, database login, what
+  it dumps, and how it ended
 * Servers behind PgBouncer ("?pgbouncer=1" in PPA_SERVERS,
   $conf['servers'][n]['pgbouncer'], or "Behind PgBouncer" on Manage servers)
   get no settings in the connection request. PgBouncer refused those
@@ -69,6 +76,10 @@ Bugs:
 * Locks/processes auto-refresh kept polling after leaving the page
 * Forms with a hidden "action" field (nearly all of them) did a full page
   load instead of loading in place
+* A data export of a table or query the login can't read (e.g. "permission
+  denied for table") crashed with HTTP 500, which browsers show as a broken
+  download (ERR_INVALID_RESPONSE). It now shows the SQL error on a page, and
+  logs "phpPgAdmin export failed for <user>: <error>"
 
 
 Version v1.1.0-mod

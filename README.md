@@ -220,6 +220,9 @@ or with an empty password. Create a normal login role for yourself, or set
 | `PPA_AUTOCOMPLETE` | `default on` | `default on`, `default off` or `disable`. |
 | `PPA_PLUGINS` | | Comma-separated, e.g. `Report`. |
 | `PPA_STATEMENT_TIMEOUT` | | Cancel statements that run longer than this, e.g. `30s` or `5min` (PostgreSQL's `statement_timeout`, also applies to the SQL editor). Unset means no limit. Not applied to servers behind PgBouncer. |
+| `PPA_PG_DUMP` | `true` | `false`: never run pg_dump or pg_dumpall, for any server (those added on Manage servers too). The Export tabs of servers, databases and schemas go away; a table still exports its data with the built-in code. Use it for live databases: pg_dump holds a lock on every table it dumps until it ends, and an application statement that needs a stronger lock (`LOCK TABLE`, `ALTER TABLE`) waits behind it, with every later query on that table waiting behind that. |
+| `PPA_PG_DUMP_LOCK_WAIT_TIMEOUT` | | pg_dump gives up when it can't lock a table within this time, e.g. `30s` (pg_dump's `--lock-wait-timeout`). Unset means it waits. |
+| `PPA_PG_DUMP_MAX_MINUTES` | | Stop a pg_dump export after this many minutes, which releases its locks. The output ends with a comment saying the dump is incomplete (a gzipped download is just cut off). Unset means no limit. Every export is logged with the app user, the database login and what it dumps. |
 | `PGCONNECT_TIMEOUT` | `10` | Seconds to wait for a server to accept a connection. |
 | `PHP_SESSION_COOKIE_SECURE` | `0` | Set to `1` when the site is served over HTTPS. |
 | `AUTH_MODE` | | Required. `sso` (a sign-in proxy says who you are, in headers) or `local` (the app keeps its own users). See [Signing in](#signing-in). |
