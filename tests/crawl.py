@@ -283,6 +283,31 @@ def check_data_grid(fetch, check, failures, base, server):
     # A token the session doesn't have: say so, not browse the whole table
     get(table("plain", qt="0123456789abcdef"), ["no longer remembered"], ["Rows 1–"])
 
+    # No link of a long query's results carries the SQL (Download, Create
+    # view, paging...), from a table's query box or from the SQL editor; the
+    # Download and Create view pages find it through the token.
+    for name, path, data in (
+            ("table query box", "display.php", dict(db, **table("plain", query=long_sql, page="1", page_size="25"))),
+            ("SQL editor", "sql.php", dict(db, schema="public", query=long_sql, paginate="on", page_size="25"))):
+        status, body = fetch(base + path, data)
+        check("POST %s long SELECT" % name, status, body)
+        links = [html.unescape(l) for l in re.findall(r'href="([^"]+)"', body)]
+        long_links = [l for l in links if len(l) > 2048]
+        if long_links:
+            failures.append("%s long SELECT -> %d links over 2 KB, e.g. %s..." % (name, len(long_links), long_links[0][:120]))
+        for target, expect in (("dataexport.php", '31000000'), ("views.php", "31000000")):
+            link = next((l for l in links if l.startswith(target + "?") and "qt=" in l), None)
+            if link is None:
+                failures.append("%s long SELECT -> no %s link with a qt token" % (name, target))
+                continue
+            status, page = fetch(base + link)
+            check(base + link, status, page)
+            if expect not in urllib.parse.unquote_plus(html.unescape(page)):
+                failures.append("%s long SELECT -> %s doesn't have the query" % (name, target))
+    status, page = fetch(base + "dataexport.php?" + urllib.parse.urlencode(dict(db, qt="0123456789abcdef")))
+    if "no longer remembered" not in page or 'name="query"' in page:
+        failures.append("dataexport.php with an unknown qt -> expected 'no longer remembered', no form")
+
     # Query results paged with qt tokens: two "tabs" with their own query
     def run_query(sql):
         status, body = fetch(base + "sql.php", dict(db, query=sql, paginate="on", page_size="25"))

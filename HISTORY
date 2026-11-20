@@ -80,12 +80,12 @@ Bugs:
   denied for table") crashed with HTTP 500, which browsers show as a broken
   download (ERR_INVALID_RESPONSE). It now shows the SQL error on a page, and
   logs "phpPgAdmin export failed for <user>: <error>"
-* Paging, sorting or filtering the results of a long query typed on a
-  table's page (e.g. an IN list of a thousand keys) failed with
-  "414 Request-URI Too Large" from the proxy: every link carried the whole
+* Paging, sorting, filtering, Download or Create view on the results of a
+  long query (e.g. an IN list of a thousand keys) failed with
+  "414 Request-URI Too Large" from the proxy: the links carried the whole
   query. Links now carry it only when it is short (1 KB once URL-encoded),
   else the query token alone. A link whose query the session no longer has
-  says so, instead of browsing the whole table
+  says so, instead of browsing the whole table or exporting another query
 
 
 Version v1.1.0-mod

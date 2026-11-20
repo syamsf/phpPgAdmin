@@ -739,11 +739,8 @@
 		if (isset($subject)) $_gets['subject'] = $subject;
 		/* Results of a query are found through the qt token: the query itself
 		 * would make the links huge.  A table's SELECT keeps a short one too,
-		 * in case the token was dropped from the session.  A long one stays
-		 * out: proxies refuse long URLs (nginx: 414 past 8 KB), and Authelia's
-		 * forward auth gets the URL in a header, within a 4 KB buffer. */
-		if ($type == 'SELECT' && strlen(rawurlencode($query_sql)) <= 1024) $_gets['query'] = $query_sql;
-		if ($qt !== null) $_gets['qt'] = $qt;
+		 * in case the token was dropped from the session (see queryUrlVars). */
+		$_gets += $misc->queryUrlVars($type == 'SELECT' ? $query_sql : null, $qt);
 		if ($count_mode == 'exact') $_gets['count'] = 'exact';
 		if (isset($_REQUEST['return'])) $_gets['return'] = $_REQUEST['return'];
 		if (isset($_REQUEST['search_path'])) $_gets['search_path'] = $_REQUEST['search_path'];
@@ -1108,9 +1105,8 @@
 						'href' => array (
 							'url' => 'views.php',
 							'urlvars' => array_merge($fields, array(
-								'action' => 'create',
-								'formDefinition' => $query_sql
-							))
+								'action' => 'create'
+							), $misc->queryUrlVars($query_sql, $qt, 'formDefinition'))
 						)
 					),
 					'content' => $lang['strcreateview']
@@ -1118,7 +1114,7 @@
 			}
 
 			// Export this query, not the session's current one (another tab may have changed it)
-			$urlvars = array('query' => $query_sql);
+			$urlvars = $misc->queryUrlVars($query_sql, $qt);
 			if (isset($_REQUEST['search_path']))
 				$urlvars['search_path'] = $_REQUEST['search_path'];
 

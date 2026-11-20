@@ -2284,6 +2284,23 @@
 		}
 
 		/**
+		 * Link parameters that find a query again: its qt token, and the query
+		 * itself only when it is short.  Proxies refuse long URLs (nginx: 414
+		 * past 8 KB), and Authelia's forward auth gets the URL in a header,
+		 * within a 4 KB buffer.
+		 * @param $sql The query, or null
+		 * @param $token Its storeQuery() token, or null
+		 * @param $name The parameter the query goes in
+		 * @return array
+		 */
+		function queryUrlVars($sql, $token, $name = 'query') {
+			$vars = array();
+			if ($sql !== null && strlen(rawurlencode((string)$sql)) <= 1024) $vars[$name] = $sql;
+			if ($token !== null) $vars['qt'] = $token;
+			return $vars;
+		}
+
+		/**
 		 * Displays link to the context help.
 		 * @param $str   - the string that the context help is related to (already escaped)
 		 * @param $help  - help section identifier

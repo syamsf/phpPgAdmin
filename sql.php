@@ -415,7 +415,7 @@
 						'url' => 'views.php',
 						'urlvars' => array_merge($fields, array (
 							'action' => 'create'
-						))
+						), $misc->queryUrlVars(null, $_REQUEST['qt'] ?? null))
 					)
 				),
 				'content' => $lang['strcreateview']
@@ -429,7 +429,7 @@
 			'attr'=> array (
 				'href' => array (
 					'url' => 'dataexport.php',
-					'urlvars' => $fields
+					'urlvars' => array_merge($fields, $misc->queryUrlVars(null, $_REQUEST['qt'] ?? null))
 				)
 			),
 			'content' => $lang['strdownload']

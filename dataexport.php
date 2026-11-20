@@ -324,14 +324,29 @@
 		// Include application functions
 		include_once('./libraries/lib.inc.php');
 
-		if ( !isset($_REQUEST['query']) or empty($_REQUEST['query']) )
-			$_REQUEST['query'] = $_SESSION['sqlquery'];
+		/* The query to export: the one in the link, else the one under its qt
+		 * token (a long query only comes that way, see Misc::queryUrlVars),
+		 * else the session's current one. */
+		$query_lost = false;
+		if (!isset($_REQUEST['query']) || !is_string($_REQUEST['query']) || $_REQUEST['query'] === '') {
+			if (isset($_REQUEST['qt']) && is_string($_REQUEST['qt']) && $_REQUEST['qt'] !== '') {
+				$_REQUEST['query'] = $misc->getStoredQuery($_REQUEST['qt']);
+				// Not the session's current query: it may be another one
+				$query_lost = ($_REQUEST['query'] === null);
+			}
+			else $_REQUEST['query'] = $_SESSION['sqlquery'] ?? '';
+		}
 
 		$misc->printHeader($lang['strexport']);
 		$misc->printBody();
 		$misc->printTrail(isset($_REQUEST['subject']) ? $_REQUEST['subject'] : 'database');
 		$misc->printTitle($lang['strexport']);
 		if (isset($msg)) $misc->printMsg($msg);
+		if ($query_lost) {
+			$misc->printMsg($lang['strquerynotfound']);
+			$misc->printFooter();
+			exit;
+		}
 
 		echo "<form action=\"dataexport.php\" method=\"post\">\n";
 		echo "<table>\n";

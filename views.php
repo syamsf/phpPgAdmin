@@ -385,7 +385,10 @@
 
 		if (!isset($_REQUEST['formView'])) $_REQUEST['formView'] = '';
 		if (!isset($_REQUEST['formDefinition'])) {
-			if (isset($_SESSION['sqlquery']))
+			// A long query comes as its qt token (Misc::queryUrlVars)
+			if (isset($_REQUEST['qt']) && ($stored = $misc->getStoredQuery($_REQUEST['qt'])) !== null)
+				$_REQUEST['formDefinition'] = $stored;
+			elseif (isset($_SESSION['sqlquery']))
 				$_REQUEST['formDefinition'] = $_SESSION['sqlquery'];
 			else $_REQUEST['formDefinition'] = 'SELECT ';
 		}
