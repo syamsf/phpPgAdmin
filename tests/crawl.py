@@ -263,6 +263,25 @@ def check_data_grid(fetch, check, failures, base, server):
     # SELECT browse (as from the table's Select form)
     get(table("plain", query="SELECT * FROM public.plain WHERE id > 10", page="2", page_size="25"),
         ["Rows 26–50", "qt="])
+    # A long SELECT from the table's query box (a list of 1,500 keys) pages
+    # through its qt token only: with the SQL in every link, proxies answer
+    # 414 Request-URI Too Large.
+    ids = ", ".join("'%09d'" % (31000000 + i) for i in range(1500))
+    long_sql = "SELECT * FROM public.plain WHERE id <= 60 OR val IN (%s)" % ids
+    status, body = fetch(base + "display.php", dict(db, **table("plain", query=long_sql, page="1", page_size="25")))
+    check("POST display.php long SELECT", status, body)
+    m = re.search(r'href="(display\.php\?[^"]*page=2)"', body)
+    if not m:
+        failures.append("POST display.php long SELECT -> no page 2 link")
+    else:
+        link = html.unescape(m.group(1))
+        if "query=" in link or "qt=" not in link or len(link) > 1024:
+            failures.append("POST display.php long SELECT -> page 2 link carries the SQL (%d bytes)" % len(link))
+        else:
+            params = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlsplit(link).query).items()}
+            get({k: v for k, v in params.items() if k not in db}, ["Rows 26–50"])
+    # A token the session doesn't have: say so, not browse the whole table
+    get(table("plain", qt="0123456789abcdef"), ["no longer remembered"], ["Rows 1–"])
 
     # Query results paged with qt tokens: two "tabs" with their own query
     def run_query(sql):

@@ -643,6 +643,15 @@
 		elseif (isset($_REQUEST['query']) && is_string($_REQUEST['query']) && trim($_REQUEST['query']) !== '') {
 			$query_sql = $_REQUEST['query'];
 		}
+		elseif (isset($_REQUEST['qt']) && is_string($_REQUEST['qt']) && $_REQUEST['qt'] !== '') {
+			/* A link to a query the session no longer has (it keeps the 20
+			 * latest, and long queries are not in the links, see $_gets).  Say
+			 * so: browsing the whole table, or the session's current query,
+			 * would show other rows than the ones asked for. */
+			$misc->printMsg($msg);
+			$misc->printMsg($lang['strquerynotfound']);
+			return;
+		}
 		elseif (!isset($object) && isset($_SESSION['sqlquery']) && trim($_SESSION['sqlquery']) !== '') {
 			$query_sql = $_SESSION['sqlquery'];
 		}
@@ -729,9 +738,11 @@
 		if (isset($object)) $_gets[$subject] = $object;
 		if (isset($subject)) $_gets['subject'] = $subject;
 		/* Results of a query are found through the qt token: the query itself
-		 * would make the links huge.  A table's SELECT keeps it, in case the
-		 * token was dropped from the session. */
-		if ($type == 'SELECT') $_gets['query'] = $query_sql;
+		 * would make the links huge.  A table's SELECT keeps a short one too,
+		 * in case the token was dropped from the session.  A long one stays
+		 * out: proxies refuse long URLs (nginx: 414 past 8 KB), and Authelia's
+		 * forward auth gets the URL in a header, within a 4 KB buffer. */
+		if ($type == 'SELECT' && strlen(rawurlencode($query_sql)) <= 1024) $_gets['query'] = $query_sql;
 		if ($qt !== null) $_gets['qt'] = $qt;
 		if ($count_mode == 'exact') $_gets['count'] = 'exact';
 		if (isset($_REQUEST['return'])) $_gets['return'] = $_REQUEST['return'];
