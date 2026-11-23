@@ -283,6 +283,18 @@ def check_data_grid(fetch, check, failures, base, server):
     # A token the session doesn't have: say so, not browse the whole table
     get(table("plain", qt="0123456789abcdef"), ["no longer remembered"], ["Rows 1–"])
 
+    # The query box of a table's page takes any query, but Edit and Delete
+    # find the row in that table by its key: only for results whose key
+    # column comes straight from it.  Else they would open (and save over,
+    # or delete) another row of this table that happens to have the same id.
+    get(table("big", query="SELECT * FROM public.big WHERE id <= 3"),
+        ["action=confeditrow", "action=confdelrow"], ["grid-no-key"])
+    for sql in ("SELECT * FROM shop.customer",                                # another table
+                "SELECT b.*, c.* FROM public.big b JOIN shop.customer c ON c.id = b.id",  # id twice
+                "SELECT id + 0 AS id, val FROM public.big WHERE id <= 3",     # an expression
+                "SELECT val FROM public.big WHERE id <= 3"):                  # no key column
+        get(table("big", query=sql), ["grid-no-key"], ["action=confeditrow", "action=confdelrow"])
+
     # No link of a long query's results carries the SQL (Download, Create
     # view, paging...), from a table's query box or from the SQL editor; the
     # Download and Create view pages find it through the token.

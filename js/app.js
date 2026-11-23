@@ -625,6 +625,9 @@
 				// the page underneath, which keeps its address and scroll.
 				var scroll = dialog.scroll;
 				closeDialog(true);
+				// A page that came from a POST comes back from postPages on
+				// Back/Forward: keep the answer there, not the page before it.
+				if (postPages[currentId]) postPages[currentId] = r.html;
 				show(r.html, location.href, { method: 'GET', push: false, scroll: scroll });
 			})
 			.catch(function () {

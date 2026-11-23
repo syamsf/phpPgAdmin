@@ -8427,6 +8427,42 @@ class Postgres extends ADODB_base {
 	}
 
 	/**
+	 * Whether the rows of a browsed result can be found again in a table by
+	 * its key, as Edit and Delete do: each key column must be returned once,
+	 * and come straight from that table, not from another table, the other
+	 * side of a join or an expression.  The server tells which table a result
+	 * column comes from, not which of its columns, so a column of the same
+	 * table renamed to the key's name ("SELECT other AS id") isn't caught.
+	 * @param $rs A record set from browseQuery()
+	 * @param $table The table, in the current schema
+	 * @param $key Its key columns (getRowIdentifier)
+	 * @return bool
+	 */
+	function resultKeyFromTable($rs, $table, $key) {
+		$res = (is_object($rs) && isset($rs->_queryID)) ? $rs->_queryID : null;
+		if (!$res || !function_exists('pg_field_table') || count($key) == 0) return false;
+
+		$c_schema = $this->_schema;
+		$this->clean($c_schema);
+		$c_table = $table;
+		$this->clean($c_table);
+		$oid = $this->selectField("SELECT c.oid FROM pg_catalog.pg_class c
+			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+			WHERE c.relname = '{$c_table}' AND n.nspname = '{$c_schema}'", 'oid');
+		if (!is_numeric($oid) || $oid <= 0) return false;
+
+		$origins = array();
+		for ($i = 0, $n = pg_num_fields($res); $i < $n; $i++) {
+			$origins[pg_field_name($res, $i)][] = pg_field_table($res, $i, true);
+		}
+		foreach ($key as $column) {
+			if (!isset($origins[$column]) || count($origins[$column]) != 1) return false;
+			if ((string) $origins[$column][0] !== (string) $oid) return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Parses and plans a query without running it (a protocol-level
 	 * prepare of the unnamed statement), to report its errors as they
 	 * concern the query as written.

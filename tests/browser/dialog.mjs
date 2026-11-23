@@ -154,6 +154,48 @@ try {
 	await page.goto(href, { waitUntil: 'networkidle0' });
 	check(await page.evaluate(() => !!document.querySelector('#ppa-main input[name=save]') && !document.querySelector('dialog')), 'the edit page still works on its own');
 
+	// The table's query box takes any query; Edit and Delete find the row in
+	// this table by its key, so they are only offered when the key comes
+	// straight from this table.
+	await sql(`DROP TABLE IF EXISTS public.${TABLE}_other; CREATE TABLE public.${TABLE}_other (id int PRIMARY KEY, name text NOT NULL, ref int);
+		INSERT INTO public.${TABLE}_other SELECT i, 'other ' || i, 11 - i FROM generate_series(1, 10) i;`);
+	await page.goto(BROWSE, { waitUntil: 'networkidle0' });
+	const runQuery = async (q) => {
+		await page.evaluate((q) => {
+			const f = document.querySelector('#ppa-main form.sql-query-form');
+			f.querySelector('textarea[name=query]').value = q;
+			const cm = f.querySelector('.CodeMirror');
+			if (cm && cm.CodeMirror) cm.CodeMirror.setValue(q);
+			f.querySelector('input[type=submit]').click();
+		}, q);
+		await idle(); await sleep(200);
+	};
+	const editKeys = () => page.$$eval('#ppa-main table#data a[href*="action=confeditrow"]', (l) => l.map((a) => new URL(a.href).searchParams.get('key[id]')).sort());
+	const noKeyHint = () => page.evaluate(() => !!document.querySelector('#ppa-main .grid-no-key'));
+	await runQuery(`SELECT * FROM public.${TABLE} WHERE id IN (2, 3)`);
+	check(JSON.stringify(await editKeys()) === '["2","3"]' && !(await noKeyHint()), 'query on this table: Edit for its rows');
+	for (const [what, q] of [
+		['another table', `SELECT * FROM public.${TABLE}_other WHERE id = 7`],
+		['a join with two id columns', `SELECT t.*, o.* FROM public.${TABLE} t JOIN public.${TABLE}_other o ON o.ref = t.id WHERE t.id = 2`],
+		['another column named id', `SELECT name, ref AS id FROM public.${TABLE}_other WHERE id = 7`],
+	]) {
+		await runQuery(q);
+		check((await editKeys()).length === 0 && !(await page.$('#ppa-main a[href*="action=confdelrow"]')) && await noKeyHint(),
+			'query on ' + what + ': no Edit or Delete, and a hint why');
+	}
+
+	// Back to a query's results after saving a row there shows the saved value
+	await runQuery(`SELECT * FROM public.${TABLE} WHERE id = 2`);
+	await page.click(rowLink('confeditrow', 2));
+	await page.waitForSelector('dialog.ppa-dialog-panel[open]');
+	await page.evaluate(() => { document.querySelector('dialog [name="values[name]"]').value = 'saved before back'; });
+	await page.click('dialog input[type=submit][name=save]');
+	await idle(); await sleep(300);
+	await runQuery(`SELECT * FROM public.${TABLE} WHERE id = 4`);
+	await page.goBack(); await idle(); await sleep(300);
+	check(/saved before back/.test(await cell(2) || ''), 'Back after saving in the panel shows the saved value: ' + await cell(2));
+	await sql(`DROP TABLE IF EXISTS public.${TABLE}_other`);
+
 	// Drop confirmations from a list open as a modal too
 	await page.goto(`${BASE}tables.php?server=${Q}&database=ppa_test&schema=public&subject=schema`, { waitUntil: 'networkidle0' });
 	const dropLink = await page.evaluateHandle((t) => [...document.querySelectorAll('a[href*="action=confirm_drop"]')].find((a) => a.href.includes('table=' + t)), TABLE);

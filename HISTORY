@@ -86,6 +86,14 @@ Bugs:
   query. Links now carry it only when it is short (1 KB once URL-encoded),
   else the query token alone. A link whose query the session no longer has
   says so, instead of browsing the whole table or exporting another query
+* Edit and Delete on the results of a query typed on a table's page looked
+  the row up in that table by the "id" the results showed, wherever it came
+  from: a query on another table, or a join with two id columns, opened
+  (and saved over, or deleted) another row of the table that had the same
+  id. They are now offered only when the query returns the table's key
+  straight from it, once; else a hint says why they are missing
+* Back to a query's results after saving a row in the edit panel showed the
+  rows as they were before the save
 
 
 Version v1.1.0-mod

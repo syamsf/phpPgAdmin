@@ -800,6 +800,14 @@
 		if (is_object($rs) && $rs->FieldCount() > 0) {
 			$rows = $info['rows'];
 
+			/* Edit and Delete find a row in this table by its key.  The query
+			 * box takes any query, so only offer them when the results carry
+			 * the key straight from this table: another table's id, or the
+			 * second id of a join, would find another row of this one. */
+			$table_key = $key;
+			if ($type == 'SELECT' && count($key) > 0 && !$data->resultKeyFromTable($rs, $object, $key))
+				$key = array();
+
 			// The order a table is shown in when no column was clicked:
 			// its primary key, else its first column, descending.
 			global $ppa_default_sort;
@@ -863,8 +871,10 @@
 					echo htmlspecialchars(sprintf($lang['strdefaultsort'], $ppa_default_sort)), ' ';
 				echo htmlspecialchars($lang['strcopycell']), "</p>\n";
 				// Edit and Delete need a key to find the row again
-				if (isset($object) && $subject == 'table' && count($key) == 0)
+				if (isset($object) && $subject == 'table' && count($table_key) == 0)
 					echo "<p class=\"grid-hint grid-no-key\">", htmlspecialchars($lang['strnorowkey']), "</p>\n";
+				elseif (isset($object) && $subject == 'table' && count($key) == 0)
+					echo "<p class=\"grid-hint grid-no-key\">", htmlspecialchars(sprintf($lang['strnorowkeyquery'], implode(', ', $table_key))), "</p>\n";
 			}
 			echo "</div>\n";
 

@@ -71,6 +71,7 @@
 	$lang['strdefaultsort'] = 'Newest first, by %s. Click a column title to sort by it.';
 	$lang['strquerynotfound'] = 'This page\'s query is no longer remembered (only the 20 latest queries of this sign-in are kept). Run the query again.';
 	$lang['strnorowkey'] = 'Rows can\'t be edited or deleted here: the table has no primary key or unique column to find them by.';
+	$lang['strnorowkeyquery'] = 'Rows can\'t be edited or deleted here: to find them in this table, the query must return its key (%s) as it is, from this table, once.';
 	$lang['strrowsunknown'] = 'Not known yet: the table has not been analyzed. Browse it, or run Analyze, to count.';
 	$lang['strlogindisallowed'] = 'Login disallowed for security reasons.';
 	$lang['strloginbadpassword'] = 'The username or password is wrong.';
