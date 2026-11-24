@@ -194,6 +194,74 @@ try {
 	await runQuery(`SELECT * FROM public.${TABLE} WHERE id = 4`);
 	await page.goBack(); await idle(); await sleep(300);
 	check(/saved before back/.test(await cell(2) || ''), 'Back after saving in the panel shows the saved value: ' + await cell(2));
+
+	// The SQL tab's results: rows of one table with its key get Edit and
+	// Delete too, and saving comes back to the same results.  Ids 8 and 9:
+	// the checks above edit 2-4 and delete 5 and 6.
+	await page.goto(`${BASE}database.php?subject=database&server=${Q}&database=ppa_test&action=sql&new=1`, { waitUntil: 'networkidle0' });
+	const runSqlTab = async (q, path) => {
+		await page.evaluate((q, path) => {
+			const f = document.querySelector('#ppa-main form.sql-editor-form');
+			f.querySelector('#paginate').checked = true;
+			f.querySelector('[name=search_path]').value = path;
+			f.querySelector('textarea[name=query]').value = q;
+			const cm = f.querySelector('.CodeMirror');
+			if (cm && cm.CodeMirror) cm.CodeMirror.setValue(q);
+			f.querySelector('input[type=submit][name=execute]').click();
+		}, q, path);
+		await idle(); await sleep(200);
+	};
+	const sqlTabState = () => page.evaluate(() => {
+		const f = document.querySelector('#ppa-main form.sql-editor-form');
+		const cm = f && f.querySelector('.CodeMirror');
+		return {
+			title: (document.querySelector('#ppa-main h2') || {}).textContent?.trim(),
+			query: cm && cm.CodeMirror ? cm.CodeMirror.getValue() : null,
+			path: f ? f.querySelector('[name=search_path]').value : null,
+		};
+	});
+	const sqlTabQuery = 'SELECT id, name FROM dlg_test WHERE id IN (8, 9) ORDER BY id';
+	const onSqlResults = async (what) => {
+		const s = await sqlTabState();
+		check(s.title === 'Query Results' && s.query === sqlTabQuery && s.path === 'shop,public',
+			what + ': still the SQL tab results, same query and search path: ' + JSON.stringify(s));
+	};
+	await runSqlTab(sqlTabQuery, 'shop,public');
+	check(JSON.stringify(await editKeys()) === '["8","9"]' && !(await noKeyHint()), 'SQL tab, one table: Edit for its rows');
+	await page.click(rowLink('confeditrow', 8));
+	await page.waitForSelector('dialog.ppa-dialog-panel[open]', { timeout: 5000 }).catch(() => {});
+	check(await dialogOpen('panel'), 'SQL tab: Edit opens the side panel');
+	check(await page.$eval('dialog [name="values[id]"]', (e) => e.value).catch(() => null) === '8', 'SQL tab: the panel has the row clicked');
+	await sleep(300); await page.screenshot({ path: OUT + 'sqltab-edit-panel.png' });
+	await page.evaluate(() => { document.querySelector('dialog [name="values[name]"]').value = 'saved from sql tab'; });
+	await page.click('dialog input[type=submit][name=save]');
+	await idle(); await sleep(300);
+	check(!(await anyDialog()), 'SQL tab: saving closes the panel');
+	check(/saved from sql tab/.test(await cell(8) || ''), 'SQL tab: the saved value is shown: ' + await cell(8));
+	check(/row 9/.test(await cell(9) || ''), 'SQL tab: the other row is unchanged: ' + await cell(9));
+	await onSqlResults('after Save');
+
+	// Delete asks first; No keeps the row
+	await page.click(rowLink('confdelrow', 9));
+	await page.waitForSelector('dialog.ppa-dialog-modal[open]', { timeout: 5000 }).catch(() => {});
+	check(await dialogOpen('modal'), 'SQL tab: Delete opens a modal');
+	check(await page.evaluate(() => document.activeElement && document.activeElement.name === 'no'), 'SQL tab: focus starts on No');
+	await page.click('dialog input[name=no]'); await sleep(200);
+	check(!(await anyDialog()) && /row 9/.test(await cell(9) || ''), 'SQL tab: No closes it and keeps the row');
+	// Yes deletes it and comes back to the same results
+	await page.click(rowLink('confdelrow', 9));
+	await page.waitForSelector('dialog.ppa-dialog-modal[open]', { timeout: 5000 }).catch(() => {});
+	await page.click('dialog input[name=yes]');
+	await idle(); await sleep(300);
+	check(!(await anyDialog()) && (await cell(9)) === null && /saved from sql tab/.test(await cell(8) || ''), 'SQL tab: Yes deletes the row: ' + await cell(9));
+	await onSqlResults('after Delete');
+	await runSqlTab('SELECT count(*) AS n FROM dlg_test WHERE id = 9', 'public');
+	check(await page.evaluate(() => [...document.querySelectorAll('table#data tbody td')].some((td) => td.innerText.trim() === '0')), 'SQL tab: row 9 is gone from the table');
+
+	// Columns from two tables stay read-only
+	await runSqlTab(`SELECT t.id, o.name FROM dlg_test t JOIN dlg_test_other o ON o.id = t.id WHERE t.id = 2`, 'public');
+	check((await editKeys()).length === 0 && !(await page.$('#ppa-main a[href*="action=confdelrow"]')) && await noKeyHint(),
+		'SQL tab, a join: no Edit or Delete, and a hint why');
 	await sql(`DROP TABLE IF EXISTS public.${TABLE}_other`);
 
 	// Drop confirmations from a list open as a modal too

@@ -357,6 +357,100 @@ def check_data_grid(fetch, check, failures, base, server):
         if "Rows 26–50 of 100" not in html.unescape(body):
             failures.append("%s&count=exact -> expected 'Rows 26–50 of 100'" % page2_a)
 
+    # SQL tab results: Edit and Delete when every column comes from one table
+    # that has a key, and the key is in the results once
+    def sql_grid(sql, search_path=None):
+        params = dict(db, query=sql, paginate="on", page_size="25")
+        if search_path is not None:
+            params["search_path"] = search_path
+        status, body = fetch(base + "sql.php", params)
+        check("POST sql.php paginate " + sql, status, body)
+        return html.unescape(body)
+
+    def edit_links(body):
+        return [urllib.parse.parse_qs(urllib.parse.urlsplit(h).query)
+                for h in re.findall(r'href="([^"]*action=confeditrow[^"]*)"', body)]
+
+    body = sql_grid("SELECT * FROM public.big WHERE id <= 3")
+    links = edit_links(body)
+    if sorted(l["key[id]"][0] for l in links) != ["1", "2", "3"] or "action=confdelrow" not in body \
+            or "grid-no-key" in body or any(l.get("table") != ["big"] or l.get("schema") != ["public"] for l in links):
+        failures.append("SQL tab single table -> expected Edit/Delete for ids 1-3 with table=big, schema=public")
+    # Unqualified, found through the search path; the link carries the path
+    links = edit_links(sql_grid("SELECT id, val FROM big WHERE id = 4", search_path="shop,public"))
+    found = [(l["key[id]"][0], l.get("schema", [None])[0], l.get("search_path", [None])[0]) for l in links]
+    if found != [("4", "public", "shop,public")]:
+        failures.append("SQL tab via search path -> expected key 4, schema public, search_path shop,public: %r" % found)
+    # The key is read by its position, not by its name
+    for sql in ("SELECT val, id FROM public.big WHERE id = 5", "SELECT id, val, val FROM public.big WHERE id = 5"):
+        if [l["key[id]"][0] for l in edit_links(sql_grid(sql))] != ["5"]:
+            failures.append("SQL tab %r -> expected one Edit link with key[id]=5" % sql)
+    # Page links keep the page's own parameters, not the row's
+    body = sql_grid("SELECT * FROM public.big WHERE id <= 30 ORDER BY id")
+    if "page=2" not in body:
+        failures.append("SQL tab 30 rows -> expected a page 2 link")
+    for m in re.finditer(r'href="(display\.php\?[^"]*)"', body):
+        if "action=" not in m.group(1) and re.search(r"[?&](table|schema)=", m.group(1)):
+            failures.append("SQL tab page link carries the row's table/schema: " + m.group(1))
+    # Read-only: no Edit or Delete, and a hint why (when there are rows)
+    for sql in ("SELECT b.*, c.* FROM public.big b JOIN shop.customer c ON c.id = b.id",
+                "SELECT id, count(*) FROM public.big WHERE id <= 3 GROUP BY id",
+                "SELECT id + 0 AS id, val FROM public.big WHERE id <= 3",
+                "SELECT * FROM public.plain WHERE id <= 3",
+                "SELECT * FROM public.big WHERE id = 1 UNION ALL SELECT * FROM public.big WHERE id = 2",
+                "SELECT * FROM shop.open_orders",
+                "SELECT * FROM shop.order_totals"):
+        body = sql_grid(sql)
+        if "action=confeditrow" in body or "action=confdelrow" in body \
+                or ("grid-no-key" not in body and "table id=\"data\"" in body and "<tbody>\n</tbody>" not in body):
+            failures.append("SQL tab %r -> expected no Edit/Delete and the no-key hint" % sql)
+
+    # The Edit and Delete forms of a SQL tab row bring the results back as
+    # they were: same stored query, search path and page
+    params = lambda href: dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(href).query))
+    body = sql_grid("SELECT * FROM public.big WHERE id <= 30 ORDER BY id", search_path="shop,public")
+    m = re.search(r'href="(display\.php\?[^"]*page=2[^"]*)"', body)
+    if not m:
+        failures.append("SQL tab 30 rows with a search path -> no page 2 link")
+    else:
+        page2 = html.unescape(get(params(m.group(1))))
+        links = re.findall(r'href="([^"]*action=confeditrow[^"]*key%5Bid%5D=26[^"]*)"', page2) \
+            or re.findall(r'href="([^"]*action=confeditrow[^"]*key\[id\]=26[^"]*)"', page2)
+        if not links:
+            failures.append("SQL tab page 2 -> no Edit link for id 26")
+        for action in ("confeditrow", "confdelrow") if links else ():
+            form = html.unescape(get(dict(params(links[0]), action=action)))
+            for field, value in (("search_path", "shop,public"), ("page", "2"), ("table", "big"), ("schema", "public")):
+                if not re.search(r'name="%s" value="%s"' % (re.escape(field), re.escape(value)), form):
+                    failures.append("SQL tab %s form -> expected hidden %s=%s" % (action, field, value))
+            if not re.search(r'name="qt" value="[0-9a-f]{16}"', form) or 'name="subject" value="table"' in form:
+                failures.append("SQL tab %s form -> expected qt, and no subject=table" % action)
+            if action == "confeditrow" and not re.search(r'name="values\[id\]"[^>]*value="26"', form):
+                failures.append("SQL tab edit form -> expected the row with id 26")
+        # Saving comes back to the results; the row's table stays out of them
+        if links:
+            row = params(links[0])
+            status, saved = fetch(base + "display.php", dict(
+                {k: v for k, v in row.items() if k not in ("action", "key[id]")},
+                action="editrow", save="Save", **{"key[id]": "26", "values[id]": "26", "values[val]": md5(26),
+                "types[id]": "integer", "types[val]": "text", "format[id]": "VALUE", "format[val]": "VALUE"}))
+            check("POST display.php editrow from the SQL tab", status, saved)
+            saved = html.unescape(saved)
+            if "Query Results" not in saved or md5(26) not in saved:
+                failures.append("SQL tab save -> expected the same Query Results with row 26")
+            for m in re.finditer(r'href="(display\.php\?[^"]*)"', saved):
+                if "action=conf" not in m.group(1) and re.search(r"[?&]table=", m.group(1)):
+                    failures.append("SQL tab save -> page link carries the row's table: " + m.group(1))
+                    break
+            trail = re.search(r'<nav class="trail".*?</nav>', saved, re.S)
+            if not trail or "table=big" in trail.group(0):
+                failures.append("SQL tab save -> expected a trail without the row's table")
+
+    # System catalogs are never edited from query results
+    for sql in ("SELECT * FROM pg_catalog.pg_namespace", "SELECT * FROM information_schema.sql_features"):
+        if "action=confeditrow" in sql_grid(sql):
+            failures.append("SQL tab %r -> a system catalog must not get Edit/Delete" % sql)
+
     # sql.php without a query (reload, back button) goes to the SQL editor
     status, body = fetch(base + "sql.php?" + urllib.parse.urlencode(db))
     check("GET sql.php", status, body)

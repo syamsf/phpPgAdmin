@@ -8463,6 +8463,52 @@ class Postgres extends ADODB_base {
 	}
 
 	/**
+	 * The table the rows of a query's results can be edited in, as Edit and
+	 * Delete do: every column must come straight from one table (not a view,
+	 * an expression, an aggregate or a join with another table), and that
+	 * table's key must be returned once (see resultKeyFromTable).
+	 * System catalogs are left out: a superuser could break the database.
+	 * @param $rs A record set from browseQuery()
+	 * @return array('schema' => ..., 'table' => ..., 'key' => key column names),
+	 *         or null when the rows can't be edited
+	 */
+	function resultRowSource($rs) {
+		$res = (is_object($rs) && isset($rs->_queryID)) ? $rs->_queryID : null;
+		if (!$res || !function_exists('pg_field_table')) return null;
+		$n = pg_num_fields($res);
+		if ($n < 1) return null;
+
+		$oid = pg_field_table($res, 0, true);
+		for ($i = 0; $i < $n; $i++) {
+			$origin = pg_field_table($res, $i, true);
+			if ($origin === false || (string) $origin !== (string) $oid) return null;
+		}
+		if (!is_numeric($oid) || $oid <= 0) return null;
+
+		// browseQuery leaves query results fetched by position; these
+		// lookups read their columns by name
+		$mode = $this->conn->setFetchMode(ADODB_FETCH_ASSOC);
+		$rel = $this->selectSet("SELECT n.nspname, c.relname FROM pg_catalog.pg_class c
+			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+			WHERE c.oid = " . (int) $oid . " AND c.relkind IN ('r', 'p')
+				AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname !~ '^pg_toast'");
+		$ok = false;
+		if (is_object($rel) && $rel->recordCount() == 1) {
+			$schema = $rel->fields['nspname'];
+			$table = $rel->fields['relname'];
+			// getRowIdentifier and resultKeyFromTable look in the current schema
+			$old_schema = $this->_schema;
+			$this->_schema = $schema;
+			$key = $this->getRowIdentifier($table);
+			$ok = is_array($key) && count($key) > 0 && $this->resultKeyFromTable($rs, $table, $key);
+			$this->_schema = $old_schema;
+		}
+		$this->conn->setFetchMode($mode);
+
+		return $ok ? array('schema' => $schema, 'table' => $table, 'key' => array_values($key)) : null;
+	}
+
+	/**
 	 * Parses and plans a query without running it (a protocol-level
 	 * prepare of the unnamed statement), to report its errors as they
 	 * concern the query as written.

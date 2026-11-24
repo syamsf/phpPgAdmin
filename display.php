@@ -82,7 +82,7 @@
 	 */
 	function printBrowseStateFields() {
 		$fields = array();
-		foreach (array('qt', 'page_size') as $name) {
+		foreach (array('qt', 'page_size', 'search_path') as $name) {
 			if (isset($_REQUEST[$name]) && is_string($_REQUEST[$name])) $fields[$name] = $_REQUEST[$name];
 		}
 		foreach (getBrowseFilters() as $column => $value) {
@@ -120,7 +120,8 @@
 			$key = safeUnserialize(urldecode($_REQUEST['key']));
 
 		if ($confirm) {
-			$misc->printTrail($_REQUEST['subject']);
+			// A row of the SQL tab's results comes without a subject: its table's trail
+			$misc->printTrail(isset($_REQUEST['subject']) && $_REQUEST['subject'] !== '' ? $_REQUEST['subject'] : 'table');
 			$misc->printTitle($lang['streditrow']);
 			$misc->printMsg($msg);
 
@@ -232,8 +233,8 @@
 			if (isset($_REQUEST['return']))
 				echo "<input type=\"hidden\" name=\"return\" value=\"", htmlspecialchars($_REQUEST['return']), "\" />\n";
 			echo "<input type=\"hidden\" name=\"page\" value=\"", htmlspecialchars($_REQUEST['page']), "\" />\n";
-			echo "<input type=\"hidden\" name=\"sortkey\" value=\"", htmlspecialchars($_REQUEST['sortkey']), "\" />\n";
-			echo "<input type=\"hidden\" name=\"sortdir\" value=\"", htmlspecialchars($_REQUEST['sortdir']), "\" />\n";
+			echo "<input type=\"hidden\" name=\"sortkey\" value=\"", htmlspecialchars($_REQUEST['sortkey'] ?? ''), "\" />\n";
+			echo "<input type=\"hidden\" name=\"sortdir\" value=\"", htmlspecialchars($_REQUEST['sortdir'] ?? ''), "\" />\n";
 			echo "<input type=\"hidden\" name=\"strings\" value=\"", htmlspecialchars($_REQUEST['strings']), "\" />\n";
 			echo "<input type=\"hidden\" name=\"key\" value=\"", htmlspecialchars(urlencode(serialize($key))), "\" />\n";
 			printBrowseStateFields();
@@ -276,7 +277,8 @@
 		global $lang;
 
 		if ($confirm) {
-			$misc->printTrail($_REQUEST['subject']);
+			// A row of the SQL tab's results comes without a subject: its table's trail
+			$misc->printTrail(isset($_REQUEST['subject']) && $_REQUEST['subject'] !== '' ? $_REQUEST['subject'] : 'table');
 			$misc->printTitle($lang['strdeleterow']);
 
 			$rs = $data->browseRow($_REQUEST['table'], $_REQUEST['key']);
@@ -321,8 +323,8 @@
 			if (isset($_REQUEST['return']))
 				echo "<input type=\"hidden\" name=\"return\" value=\"", htmlspecialchars($_REQUEST['return']), "\" />\n";
 			echo "<input type=\"hidden\" name=\"page\" value=\"", htmlspecialchars($_REQUEST['page']), "\" />\n";
-			echo "<input type=\"hidden\" name=\"sortkey\" value=\"", htmlspecialchars($_REQUEST['sortkey']), "\" />\n";
-			echo "<input type=\"hidden\" name=\"sortdir\" value=\"", htmlspecialchars($_REQUEST['sortdir']), "\" />\n";
+			echo "<input type=\"hidden\" name=\"sortkey\" value=\"", htmlspecialchars($_REQUEST['sortkey'] ?? ''), "\" />\n";
+			echo "<input type=\"hidden\" name=\"sortdir\" value=\"", htmlspecialchars($_REQUEST['sortdir'] ?? ''), "\" />\n";
 			echo "<input type=\"hidden\" name=\"strings\" value=\"", htmlspecialchars($_REQUEST['strings']), "\" />\n";
 			echo "<input type=\"hidden\" name=\"key\" value=\"", htmlspecialchars(urlencode(serialize($_REQUEST['key']))), "\" />\n";
 			printBrowseStateFields();
@@ -609,6 +611,11 @@
 			$subject = '';
 		}
 
+		/* Query results back from saving or deleting one of their rows: the
+		 * row's table came with the form, it isn't this page's (trail, links,
+		 * foreign keys).  Following a foreign key needs it. */
+		if ($subject === '' && !isset($_REQUEST['fkey'])) unset($_REQUEST['table']);
+
 		$misc->printTrail(isset($subject) ? $subject : 'database');
 		// Query results (no subject) keep the database tabs, on SQL.
 		if ($subject === '' || $subject === 'database') $misc->printTabs('database', 'sql');
@@ -807,6 +814,13 @@
 			$table_key = $key;
 			if ($type == 'SELECT' && count($key) > 0 && !$data->resultKeyFromTable($rs, $object, $key))
 				$key = array();
+			/* Results of the SQL tab: when every column comes from one table
+			 * and its key is there once, the rows are found in that table. */
+			$row_source = null;
+			if ($type == 'QUERY' && $rows > 0) {
+				$row_source = $data->resultRowSource($rs);
+				if ($row_source !== null) $key = $row_source['key'];
+			}
 
 			// The order a table is shown in when no column was clicked:
 			// its primary key, else its first column, descending.
@@ -875,22 +889,40 @@
 					echo "<p class=\"grid-hint grid-no-key\">", htmlspecialchars($lang['strnorowkey']), "</p>\n";
 				elseif (isset($object) && $subject == 'table' && count($key) == 0)
 					echo "<p class=\"grid-hint grid-no-key\">", htmlspecialchars(sprintf($lang['strnorowkeyquery'], implode(', ', $table_key))), "</p>\n";
+				elseif ($type == 'QUERY' && $row_source === null)
+					echo "<p class=\"grid-hint grid-no-key\">", htmlspecialchars($lang['strnorowkeyresults']), "</p>\n";
 			}
 			echo "</div>\n";
 
 			// Show page navigation
 			$misc->printPages($info['page'], $max_pages, $_gets, 20, $pages_opts);
 
-			// Check that the key is actually in the result set.  This can occur for select
-			// operations where the key fields aren't part of the select.  XXX:  We should
-			// be able to support this, somehow.
+			/* Where each key column is in a row: query results are fetched
+			 * by position (their names can repeat), a table's by name.  A key
+			 * column missing from the results (a SELECT without it) leaves
+			 * the rows without Edit and Delete. */
+			$key_cols = array();
+			for ($i = 0, $n = $rs->FieldCount(); $i < $n; $i++) {
+				$field = $rs->FetchField($i);
+				if (in_array($field->name, $key, true) && !isset($key_cols[$field->name]))
+					$key_cols[$field->name] = array('at' => ($type == 'QUERY') ? $i : $field->name, 'bytea' => ($field->type === 'bytea'));
+			}
 			foreach ($key as $v) {
-				// If a key column is not found in the record set, then we
-				// can't use the key.
-				if ($rows == 0 || !in_array($v, array_keys($rs->fields))) {
+				if ($rows == 0 || !isset($key_cols[$v]) || !array_key_exists($key_cols[$v]['at'], $rs->fields)) {
 					$key = array();
 					break;
 				}
+			}
+			/* A row of query results is edited in its own table, with the
+			 * search path the query ran with, to come back to these results. */
+			$row_vars = array();
+			if ($row_source !== null) {
+				$row_vars = array(
+					'table' => $row_source['table'],
+					'schema' => $row_source['schema'],
+					'search_path' => (isset($_REQUEST['search_path']) && is_string($_REQUEST['search_path']))
+						? $_REQUEST['search_path'] : implode(',', $data->getSearchPath()),
+				);
 			}
 
 			$buttons = array(
@@ -978,24 +1010,14 @@
 					$keys_array = array();
 					$has_nulls = false;
 					foreach ($key as $v) {
-						$finfo = $rs->fieldTypesArray();
-
-						if ($rs->fields[$v] === null) {
+						$value = $rs->fields[$key_cols[$v]['at']];
+						if ($value === null) {
 							$has_nulls = true;
 							break;
 						}
-
-						foreach ($finfo as $field) {
-							if ($field->name === $v) {
-								if ($field->type === 'bytea') {
-									$keys_array["key[{$v}]"] = $data->conn->BlobEncode($rs->fields[$v]);
-								} else {
-									$keys_array["key[{$v}]"] = $rs->fields[$v];
-								}
-
-							}
-						}
+						$keys_array["key[{$v}]"] = $key_cols[$v]['bytea'] ? $data->conn->BlobEncode($value) : $value;
 					}
+					$keys_array += $row_vars;
 					if ($has_nulls) {
 						echo "<td colspan=\"{$colspan}\">&nbsp;</td>\n";
 					} else {

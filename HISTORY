@@ -23,6 +23,9 @@ Features:
 * Editing a row opens a side panel over the grid, deleting a row and the
   drop/empty confirmations open a dialog. Saving keeps your page, filters
   and scroll position; a failed save stays in the panel with the error
+* Rows of the SQL tab's results can be edited and deleted too, when every
+  column comes from one table and its key (primary key or unique column) is
+  there once; saving brings back the same results
 * Tables bigger than browse_exact_count_limit (PPA_BROWSE_EXACT_COUNT_LIMIT,
   default 100000 rows) are browsed with the planner's row estimate instead of
   a COUNT(*) on every page; query results check for a next page instead of
